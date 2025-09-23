@@ -44,7 +44,9 @@
         <!-- Login Header -->
         <div class="login-header">
           <div class="login-logo">
-            <q-icon name="account_circle" color="blue-7" size="3rem" />
+            <div class="login-logo-container">
+              <q-icon name="security" color="white" size="2rem" />
+            </div>
           </div>
           <h2 class="login-title">Iniciar Sesión</h2>
           <p class="login-subtitle">Accede a tu panel de control empresarial</p>
@@ -129,32 +131,7 @@
           </q-btn>
         </form>
 
-        <!-- Additional Options -->
-        <div class="additional-options">
-          <div class="divider">
-            <span>o continúa con</span>
-          </div>
-          
-          <div class="social-login">
-            <q-btn 
-              flat 
-              class="social-btn google-btn"
-              no-caps
-            >
-              <q-icon name="mail" color="red-6" />
-              <span>Google</span>
-            </q-btn>
-            <q-btn 
-              flat 
-              class="social-btn microsoft-btn"
-              no-caps
-            >
-              <q-icon name="business" color="blue-8" />
-              <span>Microsoft</span>
-            </q-btn>
-          </div>
-        </div>
-
+      
         <!-- Footer -->
         <div class="login-footer">
           <p>¿Necesitas ayuda? <a href="#" class="help-link">Contacta soporte</a></p>
@@ -323,7 +300,7 @@ body {
 /* Branding Panel */
 .branding-panel {
   flex: 1;
-  background: linear-gradient(135deg, var(--blue-gradient-start) 0%, var(--blue-gradient-end) 100%);
+  background: linear-gradient(135deg, #1976d2 0%, #1565c0 30%, #0d47a1 100%);
   position: relative;
   overflow: hidden;
   display: flex;
@@ -338,13 +315,30 @@ body {
   left: -50%;
   width: 200%;
   height: 200%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 70%);
-  animation: pulse 20s infinite alternate;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.05) 40%, rgba(255, 255, 255, 0) 70%);
+  animation: pulse 25s infinite alternate;
+}
+
+.branding-panel::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(45deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 100%);
+  animation: shimmer 15s infinite;
 }
 
 @keyframes pulse {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(180deg) scale(1.1); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+
+@keyframes shimmer {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.7; }
 }
 
 .branding-overlay {
@@ -370,14 +364,41 @@ body {
 .logo-container {
   width: 80px;
   height: 80px;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
   margin: 0 auto 1.5rem auto;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(20px);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.logo-container::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transform: rotate(45deg);
+  transition: all 0.6s ease;
+  opacity: 0;
+}
+
+.logo-container:hover::before {
+  opacity: 1;
+  animation: shine 0.6s ease-in-out;
+}
+
+@keyframes shine {
+  0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+  100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
 }
 
 .brand-name {
@@ -418,13 +439,38 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--white);
+  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
   padding: 2rem;
+  position: relative;
+}
+
+.login-panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    radial-gradient(circle at 20% 80%, rgba(25, 118, 210, 0.15) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(66, 165, 245, 0.15) 0%, transparent 50%);
+  pointer-events: none;
 }
 
 .login-wrapper {
   width: 100%;
   max-width: 420px;
+  height: 700px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-radius: 24px;
+  padding: 2.5rem;
+  box-shadow: 
+    0 20px 40px rgba(0, 0, 0, 0.1),
+    0 1px 0 rgba(255, 255, 255, 0.5) inset;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  position: relative;
+  z-index: 1;
 }
 
 /* Login Header */
@@ -435,6 +481,49 @@ body {
 
 .login-logo {
   margin-bottom: 1.5rem;
+  display: flex;
+  justify-content: center;
+}
+
+.login-logo-container {
+  width: 70px;
+  height: 70px;
+  background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 
+    0 10px 30px rgba(25, 118, 210, 0.4),
+    0 1px 0 rgba(255, 255, 255, 0.2) inset;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.login-logo-container::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transform: rotate(45deg);
+  transition: all 0.6s ease;
+  opacity: 0;
+}
+
+.login-logo-container:hover {
+  transform: translateY(-2px);
+  box-shadow: 
+    0 15px 40px rgba(25, 118, 210, 0.5),
+    0 1px 0 rgba(255, 255, 255, 0.3) inset;
+}
+
+.login-logo-container:hover::before {
+  opacity: 1;
+  animation: shine 0.6s ease-in-out;
 }
 
 .login-title {
@@ -485,19 +574,30 @@ body {
 .form-input {
   width: 100%;
   padding: 1rem 1rem 1rem 3rem;
-  border: 2px solid var(--border-color);
-  border-radius: 12px;
+  border: 2px solid rgba(25, 118, 210, 0.1);
+  border-radius: 16px;
   font-size: 1rem;
-  transition: var(--transition);
-  background-color: var(--white);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
   color: var(--text-primary);
   font-family: inherit;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 .form-input:focus {
   outline: none;
   border-color: var(--primary-blue);
-  box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.15);
+  background: rgba(255, 255, 255, 1);
+  box-shadow: 
+    0 0 0 4px rgba(25, 118, 210, 0.1),
+    0 4px 20px rgba(25, 118, 210, 0.15);
+  transform: translateY(-2px);
+}
+
+.form-input:hover {
+  border-color: rgba(25, 118, 210, 0.3);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
 }
 
 .form-input::placeholder {
@@ -589,15 +689,45 @@ body {
   padding: 1rem 2rem;
   font-size: 1rem;
   font-weight: 600;
-  border-radius: 12px;
-  box-shadow: var(--shadow);
-  transition: var(--transition);
+  border-radius: 16px;
+  background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
+  color: white;
+  border: none;
+  cursor: pointer;
+  box-shadow: 
+    0 8px 25px rgba(25, 118, 210, 0.4),
+    0 1px 0 rgba(255, 255, 255, 0.2) inset;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   letter-spacing: 0.02em;
+  position: relative;
+  overflow: hidden;
+}
+
+.submit-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transition: left 0.5s ease;
 }
 
 .submit-button:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-lg);
+  transform: translateY(-3px);
+  box-shadow: 
+    0 15px 35px rgba(25, 118, 210, 0.5),
+    0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+.submit-button:hover::before {
+  left: 100%;
+}
+
+.submit-button:active {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 15px rgba(25, 118, 210, 0.4);
 }
 
 .btn-icon {
@@ -642,27 +772,34 @@ body {
 
 .social-btn {
   padding: 0.875rem 1rem;
-  border: 2px solid var(--border-color);
-  border-radius: 10px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
   color: var(--text-secondary);
-  transition: var(--transition);
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   font-weight: 500;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 .social-btn:hover {
   border-color: var(--primary-blue);
   color: var(--primary-blue);
-  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 1);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(25, 118, 210, 0.15);
 }
 
 .google-btn:hover {
   border-color: #db4437;
   color: #db4437;
+  box-shadow: 0 8px 25px rgba(219, 68, 55, 0.15);
 }
 
 .microsoft-btn:hover {
   border-color: #0078d4;
   color: #0078d4;
+  box-shadow: 0 8px 25px rgba(0, 120, 212, 0.15);
 }
 
 /* Footer */
@@ -697,6 +834,10 @@ body {
   .features-list {
     margin-bottom: 2rem;
   }
+  
+  .login-wrapper {
+    padding: 2rem;
+  }
 }
 
 @media (max-width: 768px) {
@@ -705,15 +846,23 @@ body {
   }
   
   .branding-panel {
-    display: none;
+    min-height: 40vh;
+    flex: none;
   }
   
   .login-panel {
     padding: 1rem;
+    flex: 1;
   }
   
   .login-wrapper {
     max-width: 100%;
+    margin: 0;
+    border-radius: 20px 20px 0 0;
+    padding: 2rem 1.5rem;
+    margin-top: -20px;
+    position: relative;
+    z-index: 2;
   }
   
   .login-title {
@@ -722,6 +871,18 @@ body {
   
   .social-login {
     grid-template-columns: 1fr;
+  }
+  
+  .branding-content {
+    padding: 2rem 1rem;
+  }
+  
+  .brand-name {
+    font-size: 1.75rem;
+  }
+  
+  .features-list {
+    display: none;
   }
 }
 
@@ -739,7 +900,23 @@ body {
   }
   
   .submit-button {
-    padding: 0.875rem 1.5rem;
+    padding: 1rem 1.5rem;
+  }
+  
+  .login-wrapper {
+    padding: 1.5rem 1rem;
+  }
+  
+  .branding-panel {
+    min-height: 30vh;
+  }
+  
+  .brand-name {
+    font-size: 1.5rem;
+  }
+  
+  .brand-tagline {
+    font-size: 1rem;
   }
 }
 
@@ -747,7 +924,7 @@ body {
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(30px);
   }
   to {
     opacity: 1;
@@ -755,13 +932,45 @@ body {
   }
 }
 
+@keyframes slideInFromLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-50px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 .login-wrapper {
-  animation: fadeIn 0.6s ease-out;
+  animation: scaleIn 0.8s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .branding-content {
-  animation: fadeIn 0.8s ease-out;
+  animation: slideInFromLeft 1s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+.feature-item {
+  animation: fadeIn 0.6s ease-out;
+  animation-fill-mode: both;
+}
+
+.feature-item:nth-child(1) { animation-delay: 0.2s; }
+.feature-item:nth-child(2) { animation-delay: 0.4s; }
+.feature-item:nth-child(3) { animation-delay: 0.6s; }
+.feature-item:nth-child(4) { animation-delay: 0.8s; }
 
 /* Mejoras para accesibilidad */
 .form-input:focus,
@@ -779,10 +988,53 @@ body {
 
 /* Mejoras visuales adicionales */
 .form-input:not(:placeholder-shown) {
-  background-color: rgba(25, 118, 210, 0.02);
+  background: rgba(25, 118, 210, 0.03);
+  border-color: rgba(25, 118, 210, 0.2);
 }
 
-.input-container:hover .form-input {
-  border-color: rgba(25, 118, 210, 0.5);
+.input-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-container::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  width: 0;
+  height: 2px;
+  background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
+  transition: all 0.3s ease;
+  transform: translateX(-50%);
+}
+
+.input-container:focus-within::after {
+  width: 100%;
+}
+
+/* Efectos de hover mejorados */
+.input-icon {
+  transition: all 0.3s ease;
+}
+
+.input-container:focus-within .input-icon {
+  color: var(--primary-blue) !important;
+  transform: scale(1.1);
+}
+
+.form-group {
+  position: relative;
+}
+
+.form-label {
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.form-group:focus-within .form-label {
+  color: var(--primary-blue);
+  transform: translateX(2px);
 }
 </style>

@@ -132,13 +132,20 @@
             label="Título del evento"
             autofocus
             @keyup.enter="addEvent"
+            :rules="[val => !!val?.trim() || 'El título es requerido']"
+            lazy-rules
           />
           <q-input
             dense
             v-model="newEvent.time"
-            label="Hora"
+            label="Hora (HH:MM)"
             mask="##:##"
+            placeholder="09:00"
             class="q-mt-md"
+            :rules="[
+              val => !val || /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(val) || 'Formato de hora inválido (HH:MM)'
+            ]"
+            lazy-rules
           />
           <q-select
             dense
@@ -146,12 +153,20 @@
             :options="eventTypes"
             label="Tipo de evento"
             class="q-mt-md"
+            emit-value
+            map-options
           />
         </q-card-section>
 
         <q-card-actions align="right" class="text-primary">
           <q-btn flat label="Cancelar" @click="cancelAddEvent" />
-          <q-btn flat label="Agregar" @click="addEvent" />
+          <q-btn 
+            flat 
+            label="Agregar" 
+            @click="addEvent"
+            :disable="!newEvent.title?.trim()"
+            color="primary"
+          />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -159,7 +174,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 
 // Variables reactivas
 const currentDate = ref(new Date())
@@ -181,37 +196,69 @@ const eventTypes = [
   { label: 'Recordatorio', value: 'reminder' }
 ]
 
-// Datos de ejemplo para eventos (podrías conectar esto con tu API)
-const events = ref([
-  {
-    id: 1,
-    date: '2024-09-25',
-    time: '09:00',
-    title: 'Reunión de equipo',
-    type: 'meeting'
-  },
-  {
-    id: 2,
-    date: '2024-09-27',
-    time: '14:30',
-    title: 'Presentación proyecto',
-    type: 'presentation'
-  },
-  {
-    id: 3,
-    date: '2024-09-30',
-    time: '11:00',
-    title: 'Revisión documentos',
-    type: 'review'
-  },
-  {
-    id: 4,
-    date: new Date().toISOString().split('T')[0], // Evento de hoy
-    time: '10:00',
-    title: 'Llamada importante',
-    type: 'call'
+// Clave para localStorage
+const STORAGE_KEY = 'calendar_events'
+
+// Función para cargar eventos desde localStorage
+function loadEventsFromStorage() {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    if (stored) {
+      return JSON.parse(stored)
+    }
+  } catch (error) {
+    console.error('Error loading events from localStorage:', error)
   }
-])
+  
+  // Datos de ejemplo si no hay eventos guardados
+  return [
+    {
+      id: 1,
+      date: '2024-09-25',
+      time: '09:00',
+      title: 'Reunión de equipo',
+      type: 'meeting'
+    },
+    {
+      id: 2,
+      date: '2024-09-27',
+      time: '14:30',
+      title: 'Presentación proyecto',
+      type: 'presentation'
+    },
+    {
+      id: 3,
+      date: '2024-09-30',
+      time: '11:00',
+      title: 'Revisión documentos',
+      type: 'review'
+    },
+    {
+      id: 4,
+      date: new Date().toISOString().split('T')[0], // Evento de hoy
+      time: '10:00',
+      title: 'Llamada importante',
+      type: 'call'
+    }
+  ]
+}
+
+// Función para guardar eventos en localStorage
+function saveEventsToStorage(eventsToSave) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(eventsToSave))
+  } catch (error) {
+    console.error('Error saving events to localStorage:', error)
+  }
+}
+
+// Inicializar eventos desde localStorage
+const events = ref(loadEventsFromStorage())
+
+// Watcher para guardar automáticamente cuando cambien los eventos
+watch(events, (newEvents) => {
+  saveEventsToStorage(newEvents)
+}, { deep: true })
 
 // Días de la semana
 const weekdays = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
@@ -314,7 +361,7 @@ function addEvent() {
   
   const dateString = selectedDate.value.toISOString().split('T')[0]
   const eventToAdd = {
-    id: Date.now(), // ID simple para el ejemplo
+    id: Date.now(), // ID único basado en timestamp
     date: dateString,
     time: newEvent.value.time || '09:00',
     title: newEvent.value.title.trim(),
@@ -322,6 +369,19 @@ function addEvent() {
   }
   
   events.value.push(eventToAdd)
+  
+  // Mostrar notificación de éxito
+  try {
+    window.$q?.notify({
+      type: 'positive',
+      message: 'Evento agregado exitosamente',
+      position: 'top-right',
+      timeout: 2000
+    })
+  } catch (error) {
+    console.log('Evento agregado:', eventToAdd.title)
+  }
+  
   cancelAddEvent()
 }
 
@@ -335,15 +395,53 @@ function cancelAddEvent() {
 }
 
 function removeEvent(eventId) {
-  const index = events.value.findIndex(event => event.id === eventId)
-  if (index !== -1) {
-    events.value.splice(index, 1)
+  const eventIndex = events.value.findIndex(event => event.id === eventId)
+  if (eventIndex !== -1) {
+    const removedEvent = events.value[eventIndex]
+    events.value.splice(eventIndex, 1)
+    
+    // Mostrar notificación de éxito
+    try {
+      window.$q?.notify({
+        type: 'warning',
+        message: 'Evento eliminado',
+        position: 'top-right',
+        timeout: 2000
+      })
+    } catch (error) {
+      console.log('Evento eliminado:', removedEvent.title)
+    }
   }
 }
 
-// Inicializar con la fecha actual seleccionada
+// Función para limpiar eventos antiguos (opcional)
+function cleanOldEvents() {
+  const currentDate = new Date()
+  const thirtyDaysAgo = new Date(currentDate.getTime() - (30 * 24 * 60 * 60 * 1000))
+  
+  const initialCount = events.value.length
+  events.value = events.value.filter(event => {
+    const eventDate = new Date(event.date)
+    return eventDate >= thirtyDaysAgo
+  })
+  
+  const removedCount = initialCount - events.value.length
+  if (removedCount > 0) {
+    console.log(`Eventos antiguos eliminados: ${removedCount}`)
+  }
+}
+
+// Inicializar componente
 onMounted(() => {
   selectedDate.value = new Date()
+  
+  // Opcional: limpiar eventos antiguos al cargar
+  // cleanOldEvents()
+  
+  // Configurar guardado automático en caso de cierre inesperado
+  window.addEventListener('beforeunload', () => {
+    saveEventsToStorage(events.value)
+  })
 })
 </script>
 
