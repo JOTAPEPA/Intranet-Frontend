@@ -17,7 +17,7 @@
                 </div>
 
                 <div class="sidebar-menu">
-                    <q-btn flat icon="dashboard" label="Inicio" align="left" class="menu-item active" no-caps @click="goHome" />
+                    <q-btn flat icon="home"pd label="Inicio" align="left" class="menu-item active" no-caps @click="goHome" />
                     
                 <q-btn 
                     flat 
@@ -55,9 +55,10 @@
                     </div>
                 </div>
 
+
                 <!-- Action Buttons -->
                 <div class="action-buttons">
-                    <q-btn-dropdown
+                    <q-btn
                         v-for="item in backdropFilterList"
                         :key="item.label"
                         unelevated
@@ -68,7 +69,7 @@
                         class="upload-btn"
                     >
                         <q-tooltip>Subir documentos de contabilidad</q-tooltip>
-                    </q-btn-dropdown>
+                    </q-btn>
                 </div>
 
                 <!-- Data Table -->
@@ -85,7 +86,15 @@
                     >
                         <template v-slot:top>
                             <div class="table-header-section">
-                                <h5 class="table-title">Documentos </h5>
+                                <div class="table-title-container">
+                                    <h5 class="table-title">Documentos</h5>
+                                    <DepartmentChip 
+                                        department-key="contabilidad" 
+                                        variant="table"
+                                        size="sm"
+                                        dense
+                                    />
+                                </div>
                                 <q-space />
                                 <div class="search-container">
                                     <q-input 
@@ -137,18 +146,7 @@
                                     class="table-cell"
                                 >
                                     <div v-if="col.name === 'acciones'" class="action-buttons-cell">
-                                        <q-btn
-                                            flat
-                                            round
-                                            color="blue-7"
-                                            icon="visibility"
-                                            size="sm"
-                                            @click="viewDocument(props.row)"
-                                            :disabled="!props.row.tieneArchivos"
-                                            class="action-btn-small"
-                                        >
-                                            <q-tooltip>Ver documentos</q-tooltip>
-                                        </q-btn>
+                                      
                                         
                                         <q-btn
                                             flat
@@ -202,6 +200,24 @@
                                             {{ col.value }}
                                         </q-chip>
                                     </div>
+                                    <div v-else-if="col.name === 'tipoArchivo'" class="file-type-cell">
+                                        <div v-if="props.row.tieneArchivos" class="file-types-container">
+                                            <q-chip 
+                                                v-for="tipo in getUniqueFileTypes(props.row.documentos)"
+                                                :key="tipo"
+                                                :color="getFileTypeColor(tipo)"
+                                                :text-color="getFileTypeTextColor(tipo)"
+                                                :icon="getFileTypeIcon(tipo)"
+                                                size="sm"
+                                                class="file-type-chip"
+                                            >
+                                                {{ tipo.toUpperCase() }}
+                                            </q-chip>
+                                        </div>
+                                        <q-chip v-else color="grey-3" text-color="grey-6" icon="remove" size="sm">
+                                            Sin archivos
+                                        </q-chip>
+                                    </div>
                                     <span v-else class="cell-content">
                                         {{ col.value }}
                                     </span>
@@ -232,7 +248,7 @@
                 <!-- Upload Dialog -->
                 <div class="q-pa-md q-gutter-sm">
                     <q-dialog v-model="dialog" :backdrop-filter="backdropFilter">
-                        <q-card class="dialog-card" style="min-width: 500px;">
+                        <q-card class="dialog-card upload-modal">
                             <q-card-section class="dialog-header"> 
                                 <div class="dialog-title">
                                     <q-icon name="cloud_upload" size="1.5rem" />
@@ -249,79 +265,181 @@
                                      @dragover.prevent="isDragOver = true" 
                                      @dragleave="isDragOver = false">
                                     
-                                    <div v-if="!selectedFile" class="upload-placeholder">
-                                        <q-icon name="cloud_upload" size="3rem" color="blue-7" />
-                                        <p class="upload-text">
-                                            Arrastra y suelta tu archivo aquí o 
-                                            <label for="file-input" class="upload-link">haz clic para seleccionar</label>
-                                        </p>
-                                        <p class="upload-hint">
-                                            Formatos soportados: PDF, DOC, DOCX, XLS, XLSX, JPG, PNG (máx. 10MB)
-                                        </p>
+                                    <!-- Interfaz inicial o agregar más archivos -->
+                                    <div v-if="selectedFiles.length === 0 || (!isUploading && !uploadResult)" class="file-selection-area">
+                                        <!-- Solo mostrar botón "Subir archivos" si no hay archivos seleccionados -->
+                                        <div v-if="selectedFiles.length === 0" class="upload-placeholder">
+                                            <q-icon name="cloud_upload" size="3rem" color="blue-7" />
+                                            <p class="upload-text">Selecciona archivos para subir</p>
+                                            <p class="upload-hint">PDF, DOC, XLS, imágenes (máximo 10 archivos, 10MB cada uno)</p>
+                                            
+                                            <q-btn 
+                                                unelevated
+                                                color="primary"
+                                                icon="attach_file"
+                                                label="Seleccionar archivos"
+                                                @click="triggerFileSelection"
+                                                class="upload-btn q-mt-md"
+                                            />
+                                        </div>
+
+                                        <!-- Área para mostrar archivos seleccionados -->
+                                        <div v-if="selectedFiles.length > 0" class="selected-files-section">
+                                            <div class="section-header">
+                                                <div class="files-counter">
+                                                    <q-icon name="visibility" class="counter-icon" />
+                                                    <span class="counter-text">{{ selectedFiles.length }} archivo{{ selectedFiles.length !== 1 ? 's' : '' }} seleccionado{{ selectedFiles.length !== 1 ? 's' : '' }}</span>
+                                                </div>
+                                                <div class="header-actions">
+                                                    <q-btn 
+                                                        flat
+                                                        dense
+                                                        icon="add"
+                                                        label="Agregar más"
+                                                        @click="triggerFileSelection(true)"
+                                                        color="blue"
+                                                        size="sm"
+                                                        class="add-more-btn"
+                                                    />
+                                                    <q-btn 
+                                                        flat
+                                                        dense
+                                                        icon="clear"
+                                                        label="Limpiar"
+                                                        @click="clearFiles"
+                                                        color="red"
+                                                        size="sm"
+                                                        class="clear-btn"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <!-- Grid de archivos con diseño exacto a las imágenes -->
+                                            <div class="files-display-grid">
+                                                <div 
+                                                    v-for="(file, index) in selectedFiles" 
+                                                    :key="index"
+                                                    class="file-card"
+                                                >
+                                                    <div class="file-card-content">
+                                                        <!-- Botón eliminar en la esquina superior derecha -->
+                                                        <q-btn 
+                                                            flat
+                                                            round
+                                                            dense
+                                                            icon="close"
+                                                            color="red"
+                                                            size="xs"
+                                                            class="file-remove-btn"
+                                                            @click="removeFile(index)"
+                                                        />
+                                                        
+                                                        <!-- Icono del archivo centrado -->
+                                                        <div class="file-icon-section">
+                                                            <q-icon 
+                                                                :name="getFileTypeIcon(file.name)"
+                                                                :color="getFileTypeColor(file.name)"
+                                                                size="3rem"
+                                                                class="file-main-icon"
+                                                            />
+                                                        </div>
+                                                        
+                                                        <!-- Información del archivo -->
+                                                        <div class="file-details-section">
+                                                            <div class="file-name-row">
+                                                                <span class="file-name-display">{{ file.name }}</span>
+                                                            </div>
+                                                            <div class="file-metadata-row">
+                                                                <span class="file-size-badge">{{ formatFileSize(file.size) }}</span>
+                                                                <q-chip 
+                                                                    :color="getFileTypeColor(getFileExtension(file.name))"
+                                                                    :text-color="getFileTypeTextColor(getFileExtension(file.name))"
+                                                                    size="sm"
+                                                                    dense
+                                                                    class="file-type-chip"
+                                                                >
+                                                                    {{ getFileExtension(file.name).toUpperCase() }}
+                                                                </q-chip>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Input oculto para selección de archivos -->
                                         <input 
-                                            id="file-input" 
-                                            type="file" 
                                             ref="fileInput"
+                                            type="file" 
                                             @change="onFileSelect" 
                                             style="display: none"
-                                            accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
+                                            accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.webp,.txt,.csv"
+                                            multiple
                                         />
                                     </div>
 
-                                    <!-- Información del archivo seleccionado -->
-                                    <div v-if="selectedFile && !isUploading" class="file-preview">
-                                        <div class="file-info">
-                                            <q-icon :name="getFileIcon(selectedFile.type)" size="2rem" color="blue-7" />
-                                            <div class="file-details">
-                                                <p class="file-name">{{ selectedFile.name }}</p>
-                                                <p class="file-size">{{ formatFileSize(selectedFile.size) }}</p>
-                                            </div>
-                                            <q-btn flat round icon="close" @click="clearFile" />
-                                        </div>
-                                        
-                                        <!-- Metadatos adicionales -->
-                                        <div class="metadata-form">
-                                            <q-input 
-                                                v-model="documentTitle" 
-                                                label="Título del documento"
-                                                outlined
-                                                class="q-mb-md"
-                                            />
-                                            <q-textarea 
-                                                v-model="documentDescription" 
-                                                label="Descripción (opcional)"
-                                                outlined
-                                                rows="3"
-                                            />
-                                        </div>
+                                    <!-- Metadatos del documento -->
+                                    <div v-if="selectedFiles.length > 0 && !isUploading && !uploadResult" class="metadata-form">
+                                        <q-input 
+                                            v-model="documentTitle" 
+                                            label="Título del documento"
+                                            outlined
+                                            dense
+                                            class="q-mb-md"
+                                            :rules="[val => !!val || 'El título es requerido']"
+                                        >
+                                            <template v-slot:prepend>
+                                                <q-icon name="title" color="blue-7" />
+                                            </template>
+                                        </q-input>
+                                        <q-textarea 
+                                            v-model="documentDescription" 
+                                            label="Descripción (opcional)"
+                                            outlined
+                                            dense
+                                            rows="2"
+                                        >
+                                            <template v-slot:prepend>
+                                                <q-icon name="description" color="grey-6" />
+                                            </template>
+                                        </q-textarea>
                                     </div>
 
                                     <!-- Progreso de subida -->
                                     <div v-if="isUploading" class="upload-progress">
                                         <div class="progress-content">
-                                            <q-icon name="cloud_upload" size="2rem" color="blue-7" />
-                                            <p class="progress-text">Subiendo archivo...</p>
+                                            <q-icon name="cloud_upload" size="2.5rem" color="blue-7" class="upload-icon" />
+                                            <h6 class="progress-title">Subiendo documento...</h6>
+                                            <p class="progress-text">
+                                                {{ selectedFiles.length === 1 ? selectedFiles[0].name : `${selectedFiles.length} archivos` }}
+                                            </p>
                                             <q-linear-progress 
                                                 :value="uploadProgress / 100" 
                                                 color="blue-7" 
-                                                size="8px"
-                                                class="q-mt-md"
+                                                size="12px"
+                                                rounded
+                                                class="progress-bar"
                                             />
-                                            <p class="progress-percentage">{{ uploadProgress }}%</p>
+                                            <p class="progress-percentage">{{ uploadProgress.toFixed(0) }}%</p>
                                         </div>
                                     </div>
 
                                     <!-- Resultado de subida -->
                                     <div v-if="uploadResult" class="upload-result">
                                         <div v-if="uploadResult.success" class="success-result">
-                                            <q-icon name="check_circle" size="2rem" color="green" />
-                                            <p class="result-text">¡Archivo subido exitosamente!</p>
-                                            <p class="result-details">El documento se ha guardado en el sistema.</p>
+                                            <q-icon name="check_circle" size="3rem" color="green" class="result-icon" />
+                                            <h6 class="result-title">¡Documento subido exitosamente!</h6>
+                                            <p class="result-text">
+                                                {{ uploadResult.filesUploaded === 1 ? 
+                                                    'El archivo se ha guardado correctamente' : 
+                                                    `Los ${uploadResult.filesUploaded} archivos se han guardado correctamente`
+                                                }}
+                                            </p>
                                         </div>
                                         <div v-else class="error-result">
-                                            <q-icon name="error" size="2rem" color="red" />
-                                            <p class="result-text">Error al subir el archivo</p>
-                                            <p class="result-details">{{ uploadResult.error }}</p>
+                                            <q-icon name="error" size="3rem" color="red" class="result-icon" />
+                                            <h6 class="result-title">Error al subir documento</h6>
+                                            <p class="result-text">{{ uploadResult.error }}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -333,21 +451,33 @@
                                     label="Cancelar" 
                                     color="grey-7" 
                                     @click="closeDialog"
+                                    :disable="isUploading"
                                 />
                                 <q-btn 
-                                    v-if="selectedFile && !isUploading && !uploadResult"
+                                    v-if="selectedFiles.length > 0 && !isUploading && !uploadResult"
                                     unelevated 
-                                    label="Subir Archivo" 
+                                    :label="`Subir ${selectedFiles.length} archivo${selectedFiles.length > 1 ? 's' : ''}`" 
                                     color="primary" 
-                                    @click="uploadFile"
-                                    :disabled="!documentTitle"
+                                    @click="uploadFiles"
+                                    :disabled="!documentTitle || isUploading"
+                                    icon="cloud_upload"
+                                    class="upload-action-btn"
                                 />
                                 <q-btn 
-                                    v-if="uploadResult"
+                                    v-if="uploadResult && !uploadResult.success"
                                     unelevated 
-                                    label="Subir Otro" 
+                                    label="Reintentar" 
                                     color="primary" 
                                     @click="resetUpload"
+                                    icon="refresh"
+                                />
+                                <q-btn 
+                                    v-if="uploadResult && uploadResult.success"
+                                    unelevated 
+                                    label="Subir otro documento" 
+                                    color="primary" 
+                                    @click="resetUpload"
+                                    icon="add"
                                 />
                             </q-card-actions>
                         </q-card>
@@ -457,10 +587,11 @@
 import { ref } from 'vue'
 
 import { computed, onMounted} from 'vue'
-import { getData } from '../services/apiClient.js'
+import { getData, postData, deleteData } from '../services/apiClient.js'
 import { useAuth } from '../stores/store.js'
 import { useRouter } from 'vue-router'
-import CloudinaryService from '../services/cloudinaryService.js'
+import axios from 'axios'
+import DepartmentChip from '../components/DepartmentChip.vue'
 
 const router = useRouter()
 const loading = ref(false)
@@ -482,7 +613,7 @@ const dialog = ref(false)
 const backdropFilter = ref('blur(4px) saturate(150%)')
 
 // Estados para la subida de archivos
-const selectedFile = ref(null)
+const selectedFiles = ref([])
 const isUploading = ref(false)
 const uploadProgress = ref(0)
 const uploadResult = ref(null)
@@ -495,12 +626,27 @@ const documentDescription = ref('')
 // Referencia al input de archivo
 const fileInput = ref(null)
 
+// Estado para saber si se están agregando más archivos
+const isAddingMoreFiles = ref(false)
+
 const columns = ref([
     {
         name: "titulo",
         align: "left",
         label: "Título del Documento",
         field: "documento",
+        sortable: true,
+    },
+    {
+        name: "tipoArchivo",
+        align: "center",
+        label: "Tipo de Archivo",
+        field: row => {
+            if (!row.documentos || row.documentos.length === 0) return 'Sin archivos';
+            // Obtener los tipos únicos de archivos
+            const tipos = [...new Set(row.documentos.map(doc => getFileExtension(doc.originalName)))];
+            return tipos.filter(tipo => tipo !== 'desconocido').join(', ') || 'Desconocido';
+        },
         sortable: true,
     },
     {
@@ -543,6 +689,10 @@ const searchTerm = ref('')
 const viewDocumentDialog = ref(false)
 const selectedDocumentForView = ref(null)
 
+function viewProfile() {
+    router.push('/profile') 
+}
+
 /**
  * Lista de botones para subir documentos
  */
@@ -580,7 +730,7 @@ function closeDialog() {
  * Resetea el estado de subida
  */
 function resetUpload() {
-    selectedFile.value = null
+    selectedFiles.value = []
     isUploading.value = false
     uploadProgress.value = 0
     uploadResult.value = null
@@ -590,12 +740,13 @@ function resetUpload() {
 }
 
 /**
- * Maneja la selección de archivo
+ * Maneja la selección de archivos
  */
 function onFileSelect(event) {
-    const file = event.target.files[0]
-    if (file) {
-        handleFileSelection(file)
+    const files = Array.from(event.target.files)
+    if (files.length > 0) {
+        handleFilesSelection(files, isAddingMoreFiles.value)
+        isAddingMoreFiles.value = false // Reset el estado
     }
 }
 
@@ -606,37 +757,109 @@ function onFileDrop(event) {
     event.preventDefault()
     isDragOver.value = false
     
-    const files = event.dataTransfer.files
+    const files = Array.from(event.dataTransfer.files)
     if (files.length > 0) {
-        handleFileSelection(files[0])
+        handleFilesSelection(files)
     }
 }
 
 /**
- * Procesa el archivo seleccionado
+ * Maneja la selección de múltiples archivos
  */
-function handleFileSelection(file) {
-    // Validar tipo de archivo
-    if (!CloudinaryService.validateFileType(file)) {
-        showNotification('negative', 'Tipo de archivo no permitido', 'Solo se permiten archivos PDF, DOC, DOCX, XLS, XLSX, JPG, PNG')
+function handleFilesSelection(files, addToExisting = false) {
+    const allowedTypes = [
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'text/plain',
+        'text/csv',
+        'image/jpeg',
+        'image/jpg',
+        'image/png',
+        'image/gif',
+        'image/webp'
+    ]
+    
+    // Validar cantidad máxima considerando archivos existentes si se están agregando
+    const currentFileCount = addToExisting ? selectedFiles.value.length : 0
+    const totalFiles = currentFileCount + files.length
+    
+    if (totalFiles > 10) {
+        showNotification('negative', 'Demasiados archivos', `Se permite un máximo de 10 archivos. Actualmente tienes ${currentFileCount} archivos.`)
         return
     }
-
-    // Validar tamaño de archivo
-    if (!CloudinaryService.validateFileSize(file, 10)) {
-        showNotification('negative', 'Archivo demasiado grande', 'El tamaño máximo permitido es 10MB')
+    
+    // Validar que no haya más de 10 archivos en la selección inicial
+    if (!addToExisting && files.length > 10) {
+        showNotification('negative', 'Demasiados archivos', 'Se permite un máximo de 10 archivos por subida')
         return
     }
-
-    selectedFile.value = file
-    documentTitle.value = file.name.split('.')[0] // Usar nombre del archivo sin extensión como título por defecto
+    
+    const validFiles = []
+    const maxSize = 10 * 1024 * 1024 // 10MB
+    
+    for (const file of files) {
+        // Validar tipo de archivo
+        if (!allowedTypes.includes(file.type)) {
+            showNotification('negative', `Tipo no permitido: ${file.name}`, 'Solo se permiten archivos PDF, Word, Excel, imágenes y texto')
+            continue
+        }
+        
+        // Validar tamaño
+        if (file.size > maxSize) {
+            showNotification('negative', `Archivo muy grande: ${file.name}`, 'Los archivos no pueden superar los 10MB')
+            continue
+        }
+        
+        validFiles.push(file)
+    }
+    
+    if (validFiles.length === 0) {
+        showNotification('negative', 'Sin archivos válidos', 'No se seleccionaron archivos válidos')
+        return
+    }
+    
+    // Agregar archivos o reemplazar según el modo
+    if (addToExisting) {
+        // Filtrar archivos duplicados por nombre
+        const existingFileNames = selectedFiles.value.map(file => file.name)
+        const newFiles = validFiles.filter(file => !existingFileNames.includes(file.name))
+        
+        if (newFiles.length === 0) {
+            showNotification('negative', 'Archivos duplicados', 'Todos los archivos seleccionados ya están en la lista')
+            return
+        }
+        
+        selectedFiles.value = [...selectedFiles.value, ...newFiles]
+        showNotification('positive', `${newFiles.length} archivo(s) agregado(s)`, `Total: ${selectedFiles.value.length} archivos`)
+    } else {
+        selectedFiles.value = validFiles
+    }
+    
+    // Generar título automático solo si no hay título o si es la primera selección
+    if (!documentTitle.value || !addToExisting) {
+        const totalFiles = selectedFiles.value.length
+        if (totalFiles === 1) {
+            documentTitle.value = selectedFiles.value[0].name.replace(/\.[^/.]+$/, "")
+        } else {
+            // Para múltiples archivos, usar un título genérico que se puede editar
+            documentTitle.value = `${totalFiles} documentos seleccionados`
+        }
+    }
+    
+    // Limpiar el input para permitir seleccionar los mismos archivos de nuevo
+    if (fileInput.value) {
+        fileInput.value.value = ''
+    }
 }
 
 /**
- * Limpia el archivo seleccionado
+ * Limpia los archivos seleccionados
  */
-function clearFile() {
-    selectedFile.value = null
+function clearFiles() {
+    selectedFiles.value = []
     documentTitle.value = ''
     documentDescription.value = ''
     if (fileInput.value) {
@@ -645,74 +868,394 @@ function clearFile() {
 }
 
 /**
- * Sube el archivo a través del servicio
+ * Elimina un archivo específico de la selección
  */
-async function uploadFile() {
-    if (!selectedFile.value || !documentTitle.value) {
+function removeFile(index) {
+    selectedFiles.value.splice(index, 1)
+    
+    // Actualizar título si no quedan archivos
+    if (selectedFiles.value.length === 0) {
+        documentTitle.value = ''
+    } else if (selectedFiles.value.length === 1) {
+        documentTitle.value = selectedFiles.value[0].name.replace(/\.[^/.]+$/, "")
+    } else {
+        documentTitle.value = `${selectedFiles.value.length} documentos seleccionados`
+    }
+}
+
+/**
+ * Activa la selección de archivos programáticamente
+ */
+function triggerFileSelection(addToExisting = false) {
+    if (fileInput.value) {
+        isAddingMoreFiles.value = addToExisting
+        fileInput.value.click()
+    }
+}
+
+/**
+ * Sube los archivos seleccionados al servidor
+ */
+async function uploadFiles() {
+    if (selectedFiles.value.length === 0 || !documentTitle.value) {
+        showNotification('negative', 'Datos incompletos', 'Selecciona al menos un archivo y proporciona un título')
         return
     }
-
-    isUploading.value = true
-    uploadProgress.value = 0
-    uploadResult.value = null
-
+    
     try {
-        const metadata = {
-            title: documentTitle.value,
-            description: documentDescription.value,
-            category: 'contabilidad',
-            uploadedBy: 'current-user', // Aquí deberías obtener el usuario actual
-            uploadDate: new Date().toISOString()
-        }
-
-        const result = await CloudinaryService.uploadToBackend(
-            selectedFile.value,
-            metadata,
-            (progress) => {
-                uploadProgress.value = progress
+        isUploading.value = true
+        uploadProgress.value = 0
+        
+        const totalFiles = selectedFiles.value.length
+        let uploadedFiles = 0
+        let successfulUploads = 0
+        let failedUploads = []
+        
+        console.log('📤 Subiendo archivos individuales a contabilidad:', {
+            cantidad: totalFiles,
+            archivos: selectedFiles.value.map(file => ({
+                nombre: file.name,
+                tipo: file.type,
+                tamaño: file.size
+            }))
+        })
+        
+        // Subir cada archivo individualmente
+        for (const [index, file] of selectedFiles.value.entries()) {
+            try {
+                const formData = new FormData()
+                
+                // Generar título individual para cada archivo - solo el nombre del archivo sin extensión
+                const individualTitle = file.name.replace(/\.[^/.]+$/, "")
+                
+                formData.append('documento', individualTitle)
+                formData.append('documentos', file)
+                
+                console.log(`📄 Subiendo archivo ${index + 1}/${totalFiles}:`, file.name)
+                
+                // Subir el archivo individual
+                const response = await axios.post(
+                    'http://localhost:5000/api/contabilidad',
+                    formData,
+                    {
+                        headers: {
+                            'Content-Type': 'multipart/form-data',
+                        }
+                    }
+                )
+                
+                console.log(`✅ Archivo ${index + 1} subido exitosamente:`, response.data)
+                successfulUploads++
+                
+            } catch (error) {
+                console.error(`❌ Error al subir archivo ${index + 1}:`, error)
+                failedUploads.push({
+                    fileName: file.name,
+                    error: error.response?.data?.message || error.message || 'Error desconocido'
+                })
             }
-        )
-
-        uploadResult.value = result
-
-        if (result.success) {
-            showNotification('positive', 'Archivo subido exitosamente', 'El documento se ha guardado en el sistema')
-
-            // Aquí podrías actualizar la tabla con el nuevo documento
-            // refreshDocuments()
-        } else {
-            showNotification('negative', 'Error al subir archivo', result.error || 'Ocurrió un error inesperado')
+            
+            uploadedFiles++
+            // Actualizar progreso
+            uploadProgress.value = Math.round((uploadedFiles / totalFiles) * 100)
+            
+            // Pequeña pausa entre archivos para evitar sobrecargar el servidor
+            if (index < selectedFiles.value.length - 1) {
+                await new Promise(resolve => setTimeout(resolve, 500))
+            }
         }
-
+        
+        // Mostrar resultados
+        if (failedUploads.length === 0) {
+            // Todos los archivos se subieron exitosamente
+            uploadResult.value = {
+                success: true,
+                data: { uploadedFiles: successfulUploads },
+                filesUploaded: successfulUploads
+            }
+            
+            const message = successfulUploads === 1 
+                ? 'Archivo subido exitosamente como documento individual' 
+                : `${successfulUploads} archivos subidos exitosamente como documentos individuales`
+            
+            showNotification('positive', message, 'Cada archivo se ha guardado como un documento separado')
+            
+        } else if (successfulUploads > 0) {
+            // Algunos archivos fallaron
+            uploadResult.value = {
+                success: true,
+                data: { uploadedFiles: successfulUploads, failedFiles: failedUploads.length },
+                filesUploaded: successfulUploads,
+                partialSuccess: true
+            }
+            
+            const failedFileNames = failedUploads.map(f => f.fileName).join(', ')
+            showNotification('negative', 
+                `${successfulUploads} archivos subidos, ${failedUploads.length} fallaron`, 
+                `Archivos fallidos: ${failedFileNames}`)
+                
+        } else {
+            // Todos los archivos fallaron
+            uploadResult.value = {
+                success: false,
+                error: `No se pudo subir ningún archivo. Errores: ${failedUploads.map(f => `${f.fileName}: ${f.error}`).join('; ')}`
+            }
+            
+            showNotification('negative', 'Error al subir archivos', 'No se pudo subir ningún archivo')
+        }
+        
+        // Recargar la lista de documentos
+        await loadDocuments()
+        
     } catch (error) {
-        console.error('Error uploading file:', error)
+        console.error('❌ Error general al subir archivos:', error)
+        
         uploadResult.value = {
             success: false,
-            error: 'Error de conexión. Inténtalo de nuevo.'
+            error: error.message || 'Error desconocido'
         }
-
-        showNotification('negative', 'Error de conexión', 'No se pudo conectar con el servidor')
+        
+        showNotification('negative', 'Error al subir archivos', error.message || 'Error desconocido')
     } finally {
         isUploading.value = false
     }
 }
 
 /**
- * Obtiene el icono según el tipo de archivo
+ * Obtiene el icono del archivo según su tipo MIME
  */
-function getFileIcon(fileType) {
-    if (fileType.includes('pdf')) return 'picture_as_pdf'
-    if (fileType.includes('word') || fileType.includes('document')) return 'description'
-    if (fileType.includes('sheet') || fileType.includes('excel')) return 'table_chart'
-    if (fileType.includes('image')) return 'image'
-    return 'insert_drive_file'
+function getFileIcon(mimeType) {
+    const iconMap = {
+        'application/pdf': 'picture_as_pdf',
+        'application/msword': 'description',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'description',
+        'application/vnd.ms-excel': 'table_chart',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'table_chart',
+        'text/plain': 'text_snippet',
+        'text/csv': 'table_chart',
+        'image/jpeg': 'image',
+        'image/jpg': 'image',
+        'image/png': 'image',
+        'image/gif': 'image',
+        'image/webp': 'image'
+    }
+    return iconMap[mimeType] || 'insert_drive_file'
+}
+
+/**
+ * Obtiene la extensión de un archivo
+ */
+function getFileExtension(fileName) {
+    if (!fileName) return 'desconocido'
+    const extension = fileName.split('.').pop()?.toLowerCase() || 'desconocido'
+    return extension
+}
+
+/**
+ * Obtiene los tipos únicos de archivos de un array de documentos
+ */
+function getUniqueFileTypes(documentos) {
+    if (!documentos || documentos.length === 0) return [];
+    const tipos = [...new Set(documentos.map(doc => getFileExtension(doc.originalName)))];
+    return tipos.filter(tipo => tipo !== 'desconocido');
+}
+
+/**
+ * Obtiene el color de fondo para un tipo de archivo
+ */
+function getFileTypeColor(tipo) {
+    const colorMap = {
+        'pdf': 'red-1',
+        'doc': 'blue-1',
+        'docx': 'blue-1',
+        'xls': 'green-1',
+        'xlsx': 'green-1',
+        'jpg': 'purple-1',
+        'jpeg': 'purple-1',
+        'png': 'purple-1',
+        'txt': 'grey-1'
+    };
+    return colorMap[tipo.toLowerCase()] || 'orange-1';
+}
+
+/**
+ * Obtiene el color del texto para un tipo de archivo
+ */
+function getFileTypeTextColor(tipo) {
+    const colorMap = {
+        'pdf': 'red-8',
+        'doc': 'blue-8',
+        'docx': 'blue-8',
+        'xls': 'green-8',
+        'xlsx': 'green-8',
+        'jpg': 'purple-8',
+        'jpeg': 'purple-8',
+        'png': 'purple-8',
+        'txt': 'grey-8'
+    };
+    return colorMap[tipo.toLowerCase()] || 'orange-8';
+}
+
+/**
+ * Obtiene el color del icono según la extensión del archivo
+ */
+function getFileColorByExtension(extension) {
+    const colorMap = {
+        'pdf': 'red-6',
+        'doc': 'blue-6',
+        'docx': 'blue-6',
+        'xls': 'green-6',
+        'xlsx': 'green-6',
+        'jpg': 'purple-6',
+        'jpeg': 'purple-6',
+        'png': 'purple-6',
+        'txt': 'grey-6'
+    };
+    return colorMap[extension?.toLowerCase()] || 'orange-6';
+}
+
+/**
+ * Obtiene el icono para un tipo de archivo
+ */
+function getFileTypeIcon(tipo) {
+    const iconMap = {
+        'pdf': 'picture_as_pdf',
+        'doc': 'description',
+        'docx': 'description',
+        'xls': 'table_chart',
+        'xlsx': 'table_chart',
+        'jpg': 'image',
+        'jpeg': 'image',
+        'png': 'image',
+        'txt': 'text_snippet'
+    };
+    return iconMap[tipo.toLowerCase()] || 'insert_drive_file';
 }
 
 /**
  * Formatea el tamaño del archivo
  */
 function formatFileSize(bytes) {
-    return CloudinaryService.formatFileSize(bytes)
+    if (bytes === 0) return '0 B'
+    const k = 1024
+    const sizes = ['B', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+}
+
+/**
+ * Función simplificada para descargar documentos
+ */
+function downloadDocumentsSimple(document) {
+    console.log('📥 Descarga simple iniciada:', document);
+    
+    if (!document.tieneArchivos || !document.documentos || document.documentos.length === 0) {
+        showNotification('negative', 'Sin archivos', 'Este documento no tiene archivos para descargar')
+        return
+    }
+    
+    // Descargar cada archivo usando su downloadURL directamente
+    document.documentos.forEach((archivo, index) => {
+        setTimeout(() => {
+            console.log(`📄 Descargando archivo ${index + 1}:`, archivo);
+            
+            if (archivo.downloadURL) {
+                // Método 1: URL directa de Firebase
+                console.log('🔗 Usando downloadURL:', archivo.downloadURL);
+                window.open(archivo.downloadURL, '_blank');
+            } else {
+                // Método 2: Endpoint del backend
+                const backendUrl = `http://localhost:5000/api/contabilidad/${document._id}/file/${index}/download`;
+                console.log('🔗 Usando backend URL:', backendUrl);
+                window.open(backendUrl, '_blank');
+            }
+        }, index * 1000); // Esperar 1 segundo entre cada descarga
+    });
+    
+    const message = document.documentos.length === 1 
+        ? 'Descarga iniciada' 
+        : `Descargando ${document.documentos.length} archivos`;
+    
+    showNotification('positive', message, 'Se abrirán las descargas en nuevas pestañas');
+}
+
+/**
+ * Descarga un archivo usando el endpoint del backend
+ */
+async function downloadSingleFileFromBackend(documentId, fileIndex, fileName) {
+    try {
+        console.log('📥 Descargando archivo desde backend:', { documentId, fileIndex, fileName });
+        
+        // Construir la URL del endpoint de descarga
+        const downloadUrl = `http://localhost:5000/api/contabilidad/${documentId}/file/${fileIndex}/download`;
+        
+        // Abrir directamente en nueva pestaña para que redirija a Firebase
+        window.open(downloadUrl, '_blank');
+        
+    } catch (error) {
+        console.error('❌ Error al descargar archivo desde backend:', error);
+        showNotification('negative', 'Error en descarga', `No se pudo descargar: ${fileName}`);
+    }
+}
+
+/**
+ * Función simplificada para descargar archivo individual
+ */
+function downloadSingleFileSimple(file) {
+    console.log('📄 Descarga simple de archivo individual:', file);
+    
+    const currentDoc = selectedDocumentForView.value;
+    if (!currentDoc || !currentDoc.documentos) {
+        showNotification('negative', 'Error', 'No se pudo encontrar la información del documento');
+        return;
+    }
+    
+    // Buscar el archivo original en la lista de documentos
+    const fileIndex = currentDoc.archivos ? currentDoc.archivos.findIndex(arch => arch.id === file.id) : -1;
+    const originalFile = fileIndex !== -1 ? currentDoc.documentos[fileIndex] : null;
+    
+    if (originalFile && originalFile.downloadURL) {
+        console.log('🔗 Usando downloadURL original:', originalFile.downloadURL);
+        window.open(originalFile.downloadURL, '_blank');
+    } else if (file.url) {
+        console.log('🔗 Usando URL procesada:', file.url);
+        window.open(file.url, '_blank');
+    } else {
+        // Último recurso: endpoint del backend
+        const backendUrl = `http://localhost:5000/api/contabilidad/${currentDoc._id}/file/${fileIndex}/download`;
+        console.log('🔗 Usando backend URL:', backendUrl);
+        window.open(backendUrl, '_blank');
+    }
+}
+
+/**
+ * Abre un archivo en una nueva pestaña
+ */
+function openFileInNewTab(file) {
+    console.log('🔗 Abriendo archivo en nueva pestaña:', file);
+    
+    // Buscar el documento actual y el archivo original
+    const currentDoc = selectedDocumentForView.value;
+    if (currentDoc && currentDoc.documentos) {
+        const fileIndex = currentDoc.archivos ? currentDoc.archivos.findIndex(arch => arch.id === file.id) : -1;
+        const originalFile = fileIndex !== -1 ? currentDoc.documentos[fileIndex] : null;
+        
+        // Usar downloadURL del archivo original si está disponible
+        if (originalFile && originalFile.downloadURL) {
+            console.log('🔗 Usando downloadURL original:', originalFile.downloadURL);
+            window.open(originalFile.downloadURL, '_blank');
+            return;
+        }
+    }
+    
+    // Fallback: usar la URL procesada
+    if (file.url) {
+        console.log('🔗 Usando URL procesada:', file.url);
+        window.open(file.url, '_blank');
+    } else {
+        console.warn('⚠️ No hay URL disponible para el archivo:', file);
+        showNotification('negative', 'Error', 'URL del archivo no disponible');
+    }
 }
 
 function handleLogout() {
@@ -727,9 +1270,9 @@ function handleLogout() {
 async function getDocuments() {
     try {
         loading.value = true;
-        console.log('📥 Cargando documentos de compras...');
+        console.log('📥 Cargando documentos de contabilidad...');
         
-        const response = await getData('/Contabilidad');
+        const response = await getData('/contabilidad');
         
         if (response && Array.isArray(response)) {
             // Procesar los datos para añadir propiedades calculadas
@@ -740,11 +1283,12 @@ async function getDocuments() {
                 archivos: doc.documentos ? doc.documentos.map(archivo => ({
                     id: archivo._id,
                     nombre: archivo.originalName,
-                    url: archivo.url,
-                    tamaño: formatFileSize(archivo.bytes),
-                    formato: archivo.format,
+                    url: archivo.downloadURL, // Firebase Storage usa downloadURL
+                    tamaño: formatFileSize(archivo.size || 0),
+                    formato: getFileExtension(archivo.originalName),
                     fechaSubida: new Date(archivo.uploadDate).toLocaleDateString('es-ES'),
-                    public_id: archivo.public_id
+                    firebaseRef: archivo.firebaseRef,
+                    mimetype: archivo.mimetype
                 })) : []
             }));
             
@@ -842,23 +1386,17 @@ async function clearSearch() {
  * Ver documentos de un registro
  */
 function viewDocument(document) {
-    if (!document.tieneArchivos) {
-        showNotification('negative', 'Sin archivos', 'Este documento no tiene archivos adjuntos');
-        return;
-    }
+    console.log('👁️ Visualizando documento:', document);
+    console.log('📁 Documentos originales:', document.documentos);
+    console.log('� Archivos procesados:', document.archivos);
     
-    console.log('👁️ Ver documento:', document);
-    
-    // Preparar los datos para el modal de vista
     selectedDocumentForView.value = {
         ...document,
         titulo: document.documento,
         fechaCreacion: new Date(document.createdAt).toLocaleDateString('es-ES', {
             year: 'numeric',
             month: 'long',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
+            day: 'numeric'
         })
     };
     
@@ -868,17 +1406,17 @@ function viewDocument(document) {
 /**
  * Descargar documentos de un registro
  */
-async function downloadDocuments(document) {
-    if (!document.tieneArchivos) {
+async function downloadDocuments(doc) {
+    if (!doc.tieneArchivos) {
         showNotification('negative', 'Sin archivos', 'Este documento no tiene archivos para descargar');
         return;
     }
     
     try {
-        console.log('📥 Descargando archivos del documento:', document.titulo);
+        console.log('📥 Descargando archivos del documento:', doc.titulo);
         
         // Descargar cada archivo
-        for (const file of document.archivos) {
+        for (const file of doc.archivos) {
             const link = document.createElement('a');
             link.href = file.url;
             link.download = file.nombre;
@@ -896,8 +1434,7 @@ async function downloadDocuments(document) {
         showNotification('positive', 'Descarga iniciada', `Se están descargando ${document.archivos.length} archivo(s)`);
         
     } catch (error) {
-        console.error('❌ Error descargando archivos:', error);
-        showNotification('negative', 'Error en descarga', 'No se pudieron descargar los archivos');
+        
     }
 }
 
@@ -919,65 +1456,19 @@ async function deleteDocument(document) {
         
         loading.value = true;
         
-        // Hacer petición DELETE al backend
-        const response = await fetch(`http://localhost:3001/api/contabilidad/${document._id}`, {
-            method: 'DELETE',
-            headers: {
-                'Content-Type': 'application/json',
-            }
-        });
+        // Usar el cliente API para hacer petición DELETE
+        await deleteData(`/contabilidad/${document._id}`);
         
-        if (response.ok) {
-            showNotification('positive', 'Documento eliminado', 'El documento y sus archivos han sido eliminados exitosamente');
-            
-            // Recargar la lista de documentos
-            await loadDocuments();
-        } else {
-            throw new Error('Error en la respuesta del servidor');
-        }
+        showNotification('positive', 'Documento eliminado', 'El documento y sus archivos han sido eliminados exitosamente');
+        
+        // Recargar la lista de documentos
+        await loadDocuments();
         
     } catch (error) {
         console.error('❌ Error eliminando documento:', error);
         showNotification('negative', 'Error al eliminar', 'No se pudo eliminar el documento');
     } finally {
         loading.value = false;
-    }
-}
-
-/**
- * Descarga un archivo individual
- */
-function downloadSingleFile(file) {
-    try {
-        console.log('📥 Descargando archivo:', file.nombre);
-        
-        const link = document.createElement('a');
-        link.href = file.url;
-        link.download = file.nombre;
-        link.target = '_blank';
-        
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        showNotification('positive', 'Descarga iniciada', `Descargando: ${file.nombre}`);
-        
-    } catch (error) {
-        console.error('❌ Error descargando archivo:', error);
-        showNotification('negative', 'Error en descarga', 'No se pudo descargar el archivo');
-    }
-}
-
-/**
- * Abre un archivo en una nueva pestaña
- */
-function openFileInNewTab(file) {
-    try {
-        console.log('🔗 Abriendo archivo en nueva pestaña:', file.nombre);
-        window.open(file.url, '_blank');
-    } catch (error) {
-        console.error('❌ Error abriendo archivo:', error);
-        showNotification('negative', 'Error', 'No se pudo abrir el archivo');
     }
 }
 
@@ -1026,6 +1517,73 @@ function getFileColor(format) {
     };
     
     return colorMap[format.toLowerCase()] || 'grey-6';
+}
+
+/**
+ * Valida el tipo de archivo
+ */
+function validateFileType(file) {
+    const allowedTypes = [
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'image/jpeg',
+        'image/jpg',
+        'image/png'
+    ];
+    return allowedTypes.includes(file.type);
+}
+
+/**
+ * Valida el tamaño del archivo
+ */
+function validateFileSize(file, maxSizeMB) {
+    const maxSizeBytes = maxSizeMB * 1024 * 1024;
+    return file.size <= maxSizeBytes;
+}
+
+/**
+ * Sube el archivo al backend
+ */
+async function uploadToBackend(file, metadata, progressCallback) {
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('metadata', JSON.stringify(metadata));
+
+        // Simular progreso para mejor UX
+        let progress = 0;
+        const progressInterval = setInterval(() => {
+            progress += Math.random() * 30;
+            if (progress > 90) progress = 90;
+            progressCallback(progress);
+        }, 200);
+
+        const response = await fetch('http://localhost:3001/api/contabilidad/upload', {
+            method: 'POST',
+            body: formData,
+        });
+
+        clearInterval(progressInterval);
+        progressCallback(100);
+
+        if (response.ok) {
+            const result = await response.json();
+            return {
+                success: true,
+                data: result
+            };
+        } else {
+            throw new Error('Error en la subida del archivo');
+        }
+    } catch (error) {
+        return {
+            success: false,
+            error: error.message || 'Error de conexión'
+        };
+    }
 }
 
 onMounted(() => {
@@ -1128,12 +1686,14 @@ onMounted(() => {
     padding: 1.5rem 1rem;
     border-radius: 16px;
     box-shadow: var(--shadow);
+    margin-left: -30px;
 }
 
 .header-left {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+
 }
 
 .page-title {
@@ -2146,6 +2706,15 @@ onMounted(() => {
     box-shadow: var(--shadow-lg);
 }
 
+.upload-modal {
+    min-width: 450px;
+    max-width: 500px;
+    max-height: 85vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
 .dialog-header {
     background: var(--primary-gradient);
     color: var(--white);
@@ -2230,19 +2799,67 @@ onMounted(() => {
     gap: 1rem;
 }
 
+.files-list-container {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1rem;
+    background: var(--white);
+}
+
+.files-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.files-header h6 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.files-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    max-height: 140px;
+    overflow-y: auto;
+}
+
+.file-item-preview {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: var(--light-gray);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    transition: all 0.3s ease;
+    min-width: 0; /* Permite que el flex shrink funcione */
+}
+
+.file-item-preview:hover {
+    border-color: var(--primary-blue);
+    box-shadow: 0 2px 8px rgba(25, 118, 210, 0.1);
+}
+
 .file-info {
     display: flex;
     align-items: center;
-    gap: 1rem;
-    padding: 1rem;
-    background: var(--white);
-    border-radius: 8px;
-    border: 1px solid var(--border-color);
-    box-shadow: var(--shadow);
+    gap: 0.75rem;
+    flex: 1;
+    min-width: 0; /* Permite que el contenido se contraiga */
+    overflow: hidden;
 }
 
 .file-details {
     flex: 1;
+    min-width: 0; /* Asegura que puede contraerse */
+    overflow: hidden;
 }
 
 .file-name {
@@ -2251,12 +2868,27 @@ onMounted(() => {
     margin: 0;
     margin-bottom: 0.25rem;
     font-size: 0.95rem;
+    /* Controla el overflow del nombre */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+    line-height: 1.3;
 }
 
 .file-size {
     color: var(--text-secondary);
     font-size: 0.8rem;
     margin: 0;
+    white-space: nowrap; /* Evita que el tamaño se rompa */
+}
+
+/* Estilos para el botón de eliminar */
+.remove-file-btn {
+    flex-shrink: 0; /* El botón nunca se contrae */
+    width: 32px;
+    height: 32px;
+    min-width: 32px; /* Asegura un tamaño mínimo */
 }
 
 .metadata-form {
@@ -2293,6 +2925,14 @@ onMounted(() => {
     color: var(--primary-blue);
     font-size: 1.1rem;
     margin: 0;
+}
+
+.progress-detail {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin: 0.5rem 0 0 0;
+    text-align: center;
+    font-style: italic;
 }
 
 /* Upload Result Styles */
@@ -2347,6 +2987,89 @@ onMounted(() => {
     --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.15);
 }
 
+/* Multiple Files Upload Styles */
+.files-list-container {
+    background: var(--white);
+    border: 2px dashed var(--primary-blue);
+    border-radius: 12px;
+    padding: 1.5rem;
+}
+
+.files-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.files-header h6 {
+    margin: 0;
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.files-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+}
+
+.file-item-preview {
+    background: #fafafa;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.file-item-preview:hover {
+    border-color: var(--primary-blue);
+    box-shadow: 0 2px 8px rgba(25, 118, 210, 0.15);
+}
+
+.file-preview-content {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem;
+    gap: 0.75rem;
+}
+
+.file-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.file-name {
+    font-weight: 500;
+    color: var(--text-primary);
+    margin: 0 0 0.25rem 0;
+    font-size: 0.9rem;
+    line-height: 1.3;
+    word-break: break-word;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.file-size {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.remove-file-btn {
+    flex-shrink: 0;
+}
+
+.upload-subtitle {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin: 0.5rem 0 0 0;
+    text-align: center;
+}
+
 /* Responsive Styles */
 @media (max-width: 768px) {
     .sidebar {
@@ -2371,6 +3094,679 @@ onMounted(() => {
 
     .header-actions {
         align-self: flex-end;
+    }
+
+    .files-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .files-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+    
+    .header-buttons {
+        align-self: stretch;
+        justify-content: space-between;
+        width: 100%;
+    }
+
+    .dialog-card {
+        min-width: 300px;
+        max-width: 95vw;
+    }
+    
+    .upload-modal {
+        min-width: 320px;
+        max-width: 95vw;
+        max-height: 90vh;
+    }
+    
+    .upload-modal .dialog-content {
+        padding: 0.75rem;
+        max-height: calc(90vh - 120px);
+    }
+    
+    .upload-modal .files-grid {
+        max-height: 100px;
+    }
+    
+    /* Mejoras para archivos seleccionados en móvil */
+    .file-item-preview {
+        padding: 0.5rem;
+        gap: 0.5rem;
+    }
+    
+    .file-info {
+        gap: 0.5rem;
+    }
+    
+    .file-name {
+        font-size: 0.85rem;
+        /* En móvil, permite más espacio para el nombre */
+    }
+    
+    .file-size {
+        font-size: 0.75rem;
+    }
+    
+    .remove-file-btn {
+        width: 28px;
+        height: 28px;
+        min-width: 28px;
+    }
+}
+
+/* Media query adicional para pantallas muy pequeñas */
+@media (max-width: 480px) {
+    .dialog-card {
+        min-width: 280px;
+        max-width: 95vw;
+    }
+    
+    .upload-modal {
+        min-width: 280px;
+        max-width: 95vw;
+        max-height: 95vh;
+    }
+    
+    .upload-modal .dialog-content {
+        padding: 0.5rem;
+        max-height: calc(95vh - 90px);
+    }
+    
+    .upload-modal .dialog-actions {
+        padding: 0.5rem;
+        flex-wrap: wrap;
+    }
+    
+    .files-grid {
+        max-height: 100px;
+        gap: 0.5rem;
+    }
+    
+    .file-item-preview {
+        padding: 0.5rem;
+    }
+    
+    .files-header {
+        flex-direction: column;
+        align-items: stretch;
+        text-align: center;
+    }
+    
+    .files-header h6 {
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+        text-align: center;
+    }
+    
+    .header-buttons {
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 0.25rem;
+    }
+    
+    .file-item-preview {
+        padding: 0.5rem;
+        flex-wrap: nowrap; /* Mantener en una fila */
+    }
+    
+    .file-details {
+        min-width: 0;
+        overflow: hidden;
+    }
+    
+    .file-name {
+        font-size: 0.8rem;
+        /* Título más corto en pantallas muy pequeñas */
+        max-width: 180px;
+    }
+    
+    .remove-file-btn {
+        width: 24px;
+        height: 24px;
+        min-width: 24px;
+        flex-shrink: 0;
+    }
+}
+
+/* Estilos comunes para DepartmentChip */
+.department-indicator {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.table-header-section {
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+    gap: 1rem;
+    padding: 1.5rem;
+
+}
+
+.table-title-container {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-left: -30px;
+}
+
+/* Estilos específicos para contabilidad */
+.department-indicator .department-chip {
+    background: linear-gradient(135deg, #388e3c 0%, #2e7d32 100%) !important;
+}
+
+.table-title-container .department-chip {
+    background: linear-gradient(135deg, #388e3c 0%, #2e7d32 100%) !important;
+}
+
+/* Estilos responsivos para el modal de subida */
+.upload-modal {
+    max-height: 85vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.upload-modal .dialog-content {
+    padding: 1rem;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+    max-height: calc(85vh - 140px);
+}
+
+.upload-modal .dialog-actions {
+    padding: 0.75rem 1rem;
+    gap: 0.5rem;
+    flex-shrink: 0;
+    border-top: 1px solid var(--border-color);
+}
+
+/* Reducir altura de la lista de archivos */
+.upload-modal .files-grid {
+    max-height: 120px;
+}
+
+.upload-modal .upload-area {
+    padding: 1.5rem;
+}
+
+/* ===== CSS específico para upload-modal inspirado en controlInterno.vue ===== */
+.upload-modal {
+    min-width: 600px;
+    max-width: 800px;
+    width: 90vw;
+    max-height: 90vh;
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+.upload-modal .dialog-content {
+    padding: 2rem;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.upload-modal .dialog-actions {
+    padding: 1.5rem 2rem;
+    background: #f8fafc;
+    border-top: 1px solid #e2e8f0;
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+}
+
+.file-selection-area {
+    width: 100%;
+}
+
+.upload-placeholder {
+    text-align: center;
+    padding: 2rem;
+    border: 2px dashed #e2e8f0;
+    border-radius: 12px;
+    background: #f8fafc;
+    transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+}
+
+.upload-placeholder:hover {
+    border-color: #1976d2;
+    background: rgba(25, 118, 210, 0.02);
+}
+
+.upload-text {
+    font-size: 1rem;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.upload-hint {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+/* === Estilos para la sección de archivos seleccionados basado en imágenes === */
+.selected-files-section {
+    width: 100%;
+    margin-top: 1rem;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding: 0.75rem 0;
+}
+
+.files-counter {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.counter-icon {
+    color: #666;
+    font-size: 1.1rem;
+}
+
+.counter-text {
+    font-weight: 600;
+    color: #333;
+    font-size: 0.95rem;
+}
+
+.header-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.add-more-btn, .clear-btn {
+    font-size: 0.8rem;
+    padding: 0.4rem 0.8rem;
+    border-radius: 6px;
+    font-weight: 500;
+}
+
+.add-more-btn {
+    color: #1976d2;
+}
+
+.clear-btn {
+    color: #d32f2f;
+}
+
+/* Grid de archivos con diseño específico según las imágenes */
+.files-display-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    max-height: calc((180px + 1rem) * 2);
+    overflow-y: auto;
+    padding-right: 0.5rem;
+}
+
+/* Responsive: 1 archivo centrado */
+@media (min-width: 1px) {
+    .files-display-grid:has(.file-card:only-child) {
+        grid-template-columns: 1fr;
+        place-items: center;
+    }
+    
+    .files-display-grid:has(.file-card:only-child) .file-card {
+        max-width: 280px;
+    }
+    
+    /* Para 3 archivos: 2 arriba, 1 centrado abajo */
+    .files-display-grid:has(.file-card:nth-child(3):last-child) .file-card:nth-child(3) {
+        grid-column: 1 / -1;
+        justify-self: center;
+        max-width: 280px;
+    }
+}
+
+/* Cards de archivos con diseño exacto a las imágenes */
+.file-card {
+    background: white;
+    border: 2px solid #e3f2fd;
+    border-radius: 12px;
+    padding: 1rem;
+    position: relative;
+    transition: all 0.3s ease;
+    min-height: 180px;
+    display: flex;
+    flex-direction: column;
+}
+
+.file-card:hover {
+    border-color: #1976d2;
+    box-shadow: 0 4px 12px rgba(25, 118, 210, 0.15);
+    transform: translateY(-2px);
+}
+
+.file-card-content {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    text-align: center;
+    position: relative;
+}
+
+.file-remove-btn {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: white;
+    border: 1px solid #ffcdd2;
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+    border-radius: 50%;
+    z-index: 2;
+}
+
+.file-remove-btn:hover {
+    background: #ffebee;
+    border-color: #f44336;
+}
+
+.file-icon-section {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 1rem 0;
+}
+
+.file-main-icon {
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+}
+
+.file-details-section {
+    margin-top: auto;
+    padding-top: 0.5rem;
+    border-top: 1px solid #f5f5f5;
+}
+
+.file-name-row {
+    display: flex;
+    justify-content: flex-start;
+    align-items: flex-start;
+    margin-bottom: 0.5rem;
+}
+
+.file-name-display {
+    font-weight: 600;
+    color: #333;
+    font-size: 0.9rem;
+    line-height: 1.2;
+    word-break: break-word;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    flex: 1;
+    min-width: 0;
+}
+
+.file-metadata-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.file-size-badge {
+    font-size: 0.75rem;
+    color: #666;
+    background: #f5f5f5;
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    font-weight: 500;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.file-type-chip {
+    font-weight: 600;
+    font-size: 0.75rem;
+    flex-shrink: 0;
+}
+
+.metadata-form {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #e2e8f0;
+}
+
+.upload-progress {
+    text-align: center;
+    padding: 3rem 2rem;
+}
+
+.progress-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    max-width: 300px;
+    margin: 0 auto;
+}
+
+.upload-icon {
+    animation: bounce 2s infinite;
+}
+
+@keyframes bounce {
+    0%, 20%, 50%, 80%, 100% {
+        transform: translateY(0);
+    }
+    40% {
+        transform: translateY(-10px);
+    }
+    60% {
+        transform: translateY(-5px);
+    }
+}
+
+.progress-title {
+    margin: 0;
+    color: var(--text-primary);
+    font-weight: 600;
+    font-size: 1.2rem;
+}
+
+.progress-text {
+    color: var(--text-secondary);
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+.progress-bar {
+    width: 100%;
+    border-radius: 8px;
+    background: rgba(25, 118, 210, 0.1);
+}
+
+.progress-percentage {
+    font-weight: 600;
+    color: var(--primary-blue);
+    font-size: 1.5rem;
+    margin: 0;
+}
+
+.upload-result {
+    text-align: center;
+    padding: 3rem 2rem;
+}
+
+.success-result,
+.error-result {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+.result-icon {
+    animation: scaleIn 0.5s ease-out;
+}
+
+@keyframes scaleIn {
+    0% {
+        transform: scale(0);
+        opacity: 0;
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.result-title {
+    margin: 0;
+    font-weight: 600;
+    font-size: 1.3rem;
+}
+
+.success-result .result-title {
+    color: #2e7d32;
+}
+
+.error-result .result-title {
+    color: #c62828;
+}
+
+.result-text {
+    color: var(--text-secondary);
+    margin: 0;
+    font-size: 1rem;
+    line-height: 1.5;
+}
+
+.upload-action-btn {
+    font-weight: 600;
+    border-radius: 8px;
+    padding: 0.75rem 1.5rem;
+}
+
+.upload-btn {
+    font-weight: 600;
+    border-radius: 8px;
+    padding: 0.75rem 1.5rem;
+}
+
+/* Scroll personalizado para contenido del modal */
+.upload-modal .dialog-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.upload-modal .dialog-content::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.upload-modal .dialog-content::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+.upload-modal .dialog-content::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* Scroll personalizado para el grid de archivos */
+.files-display-grid::-webkit-scrollbar {
+    width: 6px;
+}
+
+.files-display-grid::-webkit-scrollbar-track {
+    background: #f8fafc;
+    border-radius: 3px;
+}
+
+.files-display-grid::-webkit-scrollbar-thumb {
+    background: #cbd5e0;
+    border-radius: 3px;
+}
+
+.files-display-grid::-webkit-scrollbar-thumb:hover {
+    background: #a0aec0;
+}
+
+/* Mejoras responsivas para el modal */
+@media (max-width: 768px) {
+    .upload-modal {
+        min-width: auto;
+        width: 95vw;
+        margin: 1rem;
+        max-height: 95vh;
+    }
+
+    .upload-modal .dialog-content {
+        padding: 1.5rem;
+        max-height: 60vh;
+    }
+
+    .upload-modal .dialog-actions {
+        padding: 1rem 1.5rem;
+        flex-direction: column;
+        gap: 0.75rem;
+        align-items: stretch;
+    }
+
+    .upload-modal .dialog-actions .q-btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .upload-modal .files-display-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.75rem;
+        max-height: calc((160px + 0.75rem) * 2);
+    }
+    
+    .file-card {
+        min-height: 160px;
+        padding: 0.75rem;
+    }
+
+    .section-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 1rem;
+    }
+
+    .header-buttons {
+        justify-content: center;
+    }
+
+    .files-title {
+        justify-content: center;
+        text-align: center;
+    }
+
+    .upload-placeholder {
+        padding: 1.5rem;
+    }
+
+    .progress-content,
+    .success-result,
+    .error-result {
+        padding: 1rem;
     }
 }
 </style>

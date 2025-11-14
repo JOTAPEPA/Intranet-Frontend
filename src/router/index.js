@@ -4,6 +4,7 @@ import login from '../views/login.vue'
 import home from '../views/home.vue'
 import documentos from '../views/documentos.vue'
 import admin from '../views/admin.vue'
+import sistemas from '../views/sistemas.vue'
 import talentoHumano from '../views/talentoHumano.vue'
 import gerencia from '../views/gerencia.vue'
 import contabilidad from '../views/contabilidad.vue'
@@ -40,6 +41,14 @@ const routes = [
     name: 'admin',
     component: admin,
     meta: { requiresAuth: true, requiresAdminAccess: true } // Requiere autenticación y acceso administrativo
+   },
+
+   // Ruta específica para Sistemas
+   {
+    path: '/sistemas',
+    name: 'sistemas',
+    component: sistemas,
+    meta: { requiresAuth: true, allowedRoles: ['sistemas', 'administrador'] }
    },
 
    // Ruta específica para Recursos Humanos
@@ -187,9 +196,11 @@ function getDefaultRouteForRole(role) {
   
   switch (role) {
     case 'administrador':
-    case 'sistemas':
       console.log('Redirigiendo a admin para rol:', role);
       return { name: 'admin' }
+    case 'sistemas':
+      console.log('Redirigiendo a home para rol sistemas:', role);
+      return { name: 'home' }
     case 'gerencia':
       console.log('Redirigiendo a gerencia para rol:', role);
       return { name: 'gerencia' }

@@ -1,0 +1,821 @@
+===============================================================================
+🎨 GUÍA COMPLETA PARA TRASLADAR EL DISEÑO DEL MODAL DE UPLOAD
+===============================================================================
+Fecha: Noviembre 14, 2025
+Módulos de referencia: gerencia.vue, compras.vue
+Estado: ✅ Implementado y probado
+
+===============================================================================
+📋 ÍNDICE
+===============================================================================
+1. ESTRUCTURA HTML DEL MODAL
+2. FUNCIONES JAVASCRIPT REQUERIDAS
+3. CSS COMPLETO DEL UPLOAD-MODAL
+4. VARIABLES REACTIVAS NECESARIAS
+5. VALIDACIONES Y FUNCIONALIDAD
+6. CHECKLIST DE IMPLEMENTACIÓN
+
+===============================================================================
+1. 📝 ESTRUCTURA HTML DEL MODAL
+===============================================================================
+
+REEMPLAZAR la sección del modal (desde q-card-section class="dialog-content"):
+
+```vue
+<q-card-section class="dialog-content">
+    <!-- Área de subida de archivos -->
+    <div class="upload-area" 
+         :class="{ 'drag-over': isDragOver }"
+         @drop="onFileDrop" 
+         @dragover.prevent="isDragOver = true" 
+         @dragleave="isDragOver = false">
+        
+        <!-- Interfaz inicial o agregar más archivos -->
+        <div v-if="selectedFiles.length === 0 || (!isUploading && !uploadResult)" class="file-selection-area">
+            <!-- Solo mostrar botón "Subir archivos" si no hay archivos seleccionados -->
+            <div v-if="selectedFiles.length === 0" class="upload-placeholder">
+                <q-icon name="cloud_upload" size="3rem" color="blue-7" />
+                <p class="upload-text">Selecciona archivos para subir</p>
+                <p class="upload-hint">PDF, DOC, XLS, imágenes (máximo 10 archivos, 10MB cada uno)</p>
+                
+                <q-btn 
+                    unelevated
+                    color="primary"
+                    icon="attach_file"
+                    label="Seleccionar archivos"
+                    @click="triggerFileSelection"
+                    class="upload-btn q-mt-md"
+                />
+            </div>
+
+            <!-- Área para mostrar archivos seleccionados y opción para agregar más -->
+            <div v-if="selectedFiles.length > 0" class="selected-files-section">
+                <div class="section-header">
+                    <h6 class="files-title">
+                        <q-icon name="attachment" class="q-mr-sm" />
+                        {{ selectedFiles.length }} archivo{{ selectedFiles.length !== 1 ? 's' : '' }} seleccionado{{ selectedFiles.length !== 1 ? 's' : '' }}
+                    </h6>
+                    <div class="header-buttons">
+                        <q-btn 
+                            flat
+                            dense
+                            icon="add"
+                            label="Agregar más"
+                            @click="triggerFileSelection(true)"
+                            color="blue-7"
+                            size="sm"
+                            class="q-mr-sm"
+                        />
+                        <q-btn 
+                            flat
+                            dense
+                            icon="clear_all"
+                            label="Limpiar"
+                            @click="clearFiles"
+                            color="red-7"
+                            size="sm"
+                        />
+                    </div>
+                </div>
+
+                <!-- Grid de archivos seleccionados -->
+                <div class="files-grid">
+                    <div 
+                        v-for="(file, index) in selectedFiles" 
+                        :key="index"
+                        class="file-item-preview"
+                    >
+                        <div class="file-preview-content">
+                            <div class="file-icon-container">
+                                <q-icon 
+                                    :name="getFileIcon(file.type)"
+                                    :color="getFileColorByExtension(file.name)"
+                                    size="2rem"
+                                />
+                                <q-btn 
+                                    flat
+                                    round
+                                    dense
+                                    icon="close"
+                                    color="red"
+                                    size="xs"
+                                    class="remove-file-btn"
+                                    @click="removeFile(index)"
+                                >
+                                    <q-tooltip>Eliminar archivo</q-tooltip>
+                                </q-btn>
+                            </div>
+                            <div class="file-info">
+                                <p class="file-name">{{ file.name }}</p>
+                                <p class="file-size">{{ formatFileSize(file.size) }}</p>
+                                <q-chip 
+                                    :color="getFileTypeColor(getFileExtension(file.name))"
+                                    :text-color="getFileTypeTextColor(getFileExtension(file.name))"
+                                    size="sm"
+                                    dense
+                                >
+                                    {{ getFileExtension(file.name).toUpperCase() }}
+                                </q-chip>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Input oculto para selección de archivos -->
+            <input 
+                ref="fileInput"
+                type="file" 
+                @change="onFileSelect" 
+                style="display: none"
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.webp,.txt,.csv"
+                multiple
+            />
+        </div>
+
+        <!-- Metadatos del documento -->
+        <div v-if="selectedFiles.length > 0 && !isUploading && !uploadResult" class="metadata-form">
+            <q-input 
+                v-model="documentTitle" 
+                label="Título del documento"
+                outlined
+                dense
+                class="q-mb-md"
+                :rules="[val => !!val || 'El título es requerido']"
+            >
+                <template v-slot:prepend>
+                    <q-icon name="title" color="blue-7" />
+                </template>
+            </q-input>
+            <q-textarea 
+                v-model="documentDescription" 
+                label="Descripción (opcional)"
+                outlined
+                dense
+                rows="2"
+            >
+                <template v-slot:prepend>
+                    <q-icon name="description" color="grey-6" />
+                </template>
+            </q-textarea>
+        </div>
+
+        <!-- Progreso de subida -->
+        <div v-if="isUploading" class="upload-progress">
+            <div class="progress-content">
+                <q-icon name="cloud_upload" size="2.5rem" color="blue-7" class="upload-icon" />
+                <h6 class="progress-title">Subiendo documento...</h6>
+                <p class="progress-text">
+                    {{ selectedFiles.length === 1 ? selectedFiles[0].name : `${selectedFiles.length} archivos` }}
+                </p>
+                <q-linear-progress 
+                    :value="uploadProgress / 100" 
+                    color="blue-7" 
+                    size="12px"
+                    rounded
+                    class="progress-bar"
+                />
+                <p class="progress-percentage">{{ uploadProgress.toFixed(0) }}%</p>
+            </div>
+        </div>
+
+        <!-- Resultado de subida -->
+        <div v-if="uploadResult" class="upload-result">
+            <div v-if="uploadResult.success" class="success-result">
+                <q-icon name="check_circle" size="3rem" color="green" class="result-icon" />
+                <h6 class="result-title">¡Documento subido exitosamente!</h6>
+                <p class="result-text">
+                    {{ uploadResult.filesUploaded === 1 ? 
+                        'El archivo se ha guardado correctamente' : 
+                        `Los ${uploadResult.filesUploaded} archivos se han guardado correctamente`
+                    }}
+                </p>
+            </div>
+            <div v-else class="error-result">
+                <q-icon name="error" size="3rem" color="red" class="result-icon" />
+                <h6 class="result-title">Error al subir documento</h6>
+                <p class="result-text">{{ uploadResult.error }}</p>
+            </div>
+        </div>
+    </div>
+</q-card-section>
+
+<q-card-actions class="dialog-actions">
+    <q-btn 
+        flat 
+        label="Cancelar" 
+        color="grey-7" 
+        @click="closeDialog"
+        :disable="isUploading"
+    />
+    <q-btn 
+        v-if="selectedFiles.length > 0 && !isUploading && !uploadResult"
+        unelevated 
+        :label="`Subir ${selectedFiles.length} archivo${selectedFiles.length > 1 ? 's' : ''}`" 
+        color="primary" 
+        @click="uploadFiles"
+        :disabled="!documentTitle || isUploading"
+        icon="cloud_upload"
+        class="upload-action-btn"
+    />
+    <q-btn 
+        v-if="uploadResult && !uploadResult.success"
+        unelevated 
+        label="Reintentar" 
+        color="primary" 
+        @click="resetUpload"
+        icon="refresh"
+    />
+    <q-btn 
+        v-if="uploadResult && uploadResult.success"
+        unelevated 
+        label="Subir otro documento" 
+        color="primary" 
+        @click="resetUpload"
+        icon="add"
+    />
+</q-card-actions>
+```
+
+IMPORTANTE: Asegurar que el q-card tenga la clase "upload-modal":
+```vue
+<q-card class="dialog-card upload-modal">
+```
+
+===============================================================================
+2. ⚙️ FUNCIONES JAVASCRIPT REQUERIDAS
+===============================================================================
+
+AGREGAR estas variables reactivas:
+```javascript
+const isAddingMoreFiles = ref(false)
+```
+
+ACTUALIZAR la función triggerFileSelection:
+```javascript
+/**
+ * Abre el diálogo de selección de archivos
+ */
+function triggerFileSelection(addingMore = false) {
+    isAddingMoreFiles.value = addingMore
+    if (fileInput.value) {
+        fileInput.value.click()
+    }
+}
+```
+
+AGREGAR la función getFileColorByExtension:
+```javascript
+/**
+ * Obtiene el color del archivo según su extensión
+ */
+function getFileColorByExtension(fileName) {
+    if (!fileName) return 'grey-6'
+    
+    const extension = fileName.split('.').pop()?.toLowerCase() || ''
+    const colorMap = {
+        'pdf': 'red-6',
+        'doc': 'blue-6',
+        'docx': 'blue-6',
+        'xls': 'green-6',
+        'xlsx': 'green-6',
+        'jpg': 'purple-6',
+        'jpeg': 'purple-6',
+        'png': 'purple-6',
+        'gif': 'purple-6',
+        'webp': 'purple-6',
+        'txt': 'orange-6',
+        'csv': 'teal-6'
+    }
+    
+    return colorMap[extension] || 'grey-6'
+}
+```
+
+ACTUALIZAR la función onFileSelect para manejar isAddingMoreFiles:
+```javascript
+function onFileSelect(event) {
+    const files = Array.from(event.target.files)
+    if (files.length > 0) {
+        handleFilesSelection(files, isAddingMoreFiles.value)
+    }
+    // Limpiar el input para permitir seleccionar los mismos archivos nuevamente
+    if (fileInput.value) {
+        fileInput.value.value = ''
+    }
+}
+```
+
+ACTUALIZAR la función clearFiles para resetear isAddingMoreFiles:
+```javascript
+function clearFiles() {
+    selectedFiles.value = []
+    documentTitle.value = ''
+    documentDescription.value = ''
+    isAddingMoreFiles.value = false
+    if (fileInput.value) {
+        fileInput.value.value = ''
+    }
+}
+```
+
+===============================================================================
+3. 🎨 CSS COMPLETO DEL UPLOAD-MODAL
+===============================================================================
+
+REEMPLAZAR toda la sección de CSS del modal con:
+
+```css
+/* ===== CSS específico para upload-modal ===== */
+.upload-modal {
+    min-width: 600px;
+    max-width: 800px;
+    width: 90vw;
+    max-height: 90vh;
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+.upload-modal .dialog-content {
+    padding: 2rem;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.upload-modal .dialog-actions {
+    padding: 1.5rem 2rem;
+    background: #f8fafc;
+    border-top: 1px solid #e2e8f0;
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+}
+
+.file-selection-area {
+    width: 100%;
+}
+
+.upload-placeholder {
+    text-align: center;
+    padding: 2rem;
+    border: 2px dashed #e2e8f0;
+    border-radius: 12px;
+    background: #f8fafc;
+    transition: all 0.3s ease;
+}
+
+.upload-placeholder:hover {
+    border-color: #1976d2;
+    background: rgba(25, 118, 210, 0.02);
+}
+
+.selected-files-section {
+    width: 100%;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.files-title {
+    margin: 0;
+    color: var(--text-primary);
+    font-weight: 600;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+}
+
+.header-buttons {
+    display: flex;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+.files-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 0.5rem;
+}
+
+.file-item-preview {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.file-item-preview:hover {
+    border-color: #1976d2;
+    box-shadow: 0 4px 12px rgba(25, 118, 210, 0.15);
+    transform: translateY(-1px);
+}
+
+.file-preview-content {
+    padding: 1rem;
+}
+
+.file-icon-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 0.75rem;
+}
+
+.remove-file-btn {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: white;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.file-info {
+    text-align: center;
+}
+
+.file-info .file-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 0.5rem 0;
+    font-size: 0.9rem;
+    line-height: 1.3;
+    word-break: break-word;
+}
+
+.file-info .file-size {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    margin: 0 0 0.5rem 0;
+}
+
+.metadata-form {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #e2e8f0;
+}
+
+.upload-progress {
+    text-align: center;
+    padding: 3rem 2rem;
+}
+
+.progress-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    max-width: 300px;
+    margin: 0 auto;
+}
+
+.upload-icon {
+    animation: bounce 2s infinite;
+}
+
+@keyframes bounce {
+    0%, 20%, 50%, 80%, 100% {
+        transform: translateY(0);
+    }
+    40% {
+        transform: translateY(-10px);
+    }
+    60% {
+        transform: translateY(-5px);
+    }
+}
+
+.progress-title {
+    margin: 0;
+    color: var(--text-primary);
+    font-weight: 600;
+    font-size: 1.2rem;
+}
+
+.progress-text {
+    color: var(--text-secondary);
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+.progress-bar {
+    width: 100%;
+    border-radius: 8px;
+    background: rgba(25, 118, 210, 0.1);
+}
+
+.progress-percentage {
+    font-weight: 600;
+    color: var(--primary-blue);
+    font-size: 1.5rem;
+    margin: 0;
+}
+
+.upload-result {
+    text-align: center;
+    padding: 3rem 2rem;
+}
+
+.success-result,
+.error-result {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+.result-icon {
+    animation: scaleIn 0.5s ease-out;
+}
+
+@keyframes scaleIn {
+    0% {
+        transform: scale(0);
+        opacity: 0;
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.result-title {
+    margin: 0;
+    font-weight: 600;
+    font-size: 1.3rem;
+}
+
+.success-result .result-title {
+    color: #2e7d32;
+}
+
+.error-result .result-title {
+    color: #c62828;
+}
+
+.result-text {
+    color: var(--text-secondary);
+    margin: 0;
+    font-size: 1rem;
+    line-height: 1.5;
+}
+
+.upload-action-btn {
+    font-weight: 600;
+    border-radius: 8px;
+    padding: 0.75rem 1.5rem;
+}
+
+/* Scroll personalizado para contenido del modal */
+.upload-modal .dialog-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.upload-modal .dialog-content::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.upload-modal .dialog-content::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+.upload-modal .dialog-content::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+.files-grid::-webkit-scrollbar {
+    width: 6px;
+}
+
+.files-grid::-webkit-scrollbar-track {
+    background: #f8fafc;
+    border-radius: 3px;
+}
+
+.files-grid::-webkit-scrollbar-thumb {
+    background: #cbd5e0;
+    border-radius: 3px;
+}
+
+.files-grid::-webkit-scrollbar-thumb:hover {
+    background: #a0aec0;
+}
+
+/* Mejoras responsivas para el modal */
+@media (max-width: 768px) {
+    .upload-modal {
+        min-width: auto;
+        width: 95vw;
+        margin: 1rem;
+        max-height: 95vh;
+    }
+
+    .upload-modal .dialog-content {
+        padding: 1.5rem;
+        max-height: 60vh;
+    }
+
+    .upload-modal .dialog-actions {
+        padding: 1rem 1.5rem;
+        flex-direction: column;
+        gap: 0.75rem;
+        align-items: stretch;
+    }
+
+    .upload-modal .dialog-actions .q-btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .upload-modal .files-grid {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+        max-height: 300px;
+    }
+
+    .section-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 1rem;
+    }
+
+    .header-buttons {
+        justify-content: center;
+    }
+
+    .files-title {
+        justify-content: center;
+        text-align: center;
+    }
+
+    .upload-placeholder {
+        padding: 1.5rem;
+    }
+
+    .progress-content,
+    .success-result,
+    .error-result {
+        padding: 1rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .upload-modal {
+        width: calc(100vw - 1rem);
+        margin: 0.5rem;
+        min-width: auto;
+        max-height: 98vh;
+    }
+
+    .upload-modal .dialog-content {
+        padding: 1rem;
+        max-height: 50vh;
+    }
+
+    .upload-modal .dialog-actions {
+        padding: 0.75rem 1rem;
+    }
+
+    .file-item-preview {
+        border-radius: 8px;
+    }
+
+    .file-preview-content {
+        padding: 0.75rem;
+    }
+
+    .metadata-form {
+        margin-top: 1rem;
+        padding-top: 1rem;
+    }
+
+    .upload-placeholder {
+        padding: 1rem;
+    }
+
+    .upload-text,
+    .upload-hint {
+        font-size: 0.9rem;
+    }
+
+    .progress-title {
+        font-size: 1.1rem;
+    }
+
+    .result-title {
+        font-size: 1.2rem;
+    }
+}
+```
+
+===============================================================================
+4. 🔧 VARIABLES REACTIVAS NECESARIAS
+===============================================================================
+
+Asegurar que estén declaradas estas variables:
+
+```javascript
+const selectedFiles = ref([])
+const isUploading = ref(false)
+const uploadProgress = ref(0)
+const uploadResult = ref(null)
+const isDragOver = ref(false)
+const isAddingMoreFiles = ref(false) // ← NUEVA VARIABLE
+const documentTitle = ref('')
+const documentDescription = ref('')
+const fileInput = ref(null)
+```
+
+===============================================================================
+5. ✅ VALIDACIONES Y FUNCIONALIDAD
+===============================================================================
+
+VERIFICAR que existan estas funciones:
+- triggerFileSelection(addingMore = false)
+- getFileColorByExtension(fileName)
+- handleFilesSelection(files, addToExisting = false)
+- clearFiles()
+- removeFile(index)
+- formatFileSize(bytes)
+- getFileExtension(fileName)
+- getFileIcon(mimeType)
+- getFileTypeColor(tipo)
+- getFileTypeTextColor(tipo)
+
+ASEGURAR que la función uploadFiles mantenga la lógica de subida individual.
+
+===============================================================================
+6. ✅ CHECKLIST DE IMPLEMENTACIÓN
+===============================================================================
+
+Para trasladar a un nuevo módulo:
+
+[ ] 1. Agregar clase "upload-modal" al q-card
+[ ] 2. Reemplazar toda la estructura HTML del modal
+[ ] 3. Agregar variable isAddingMoreFiles = ref(false)
+[ ] 4. Actualizar función triggerFileSelection con parámetro
+[ ] 5. Agregar función getFileColorByExtension
+[ ] 6. Actualizar función onFileSelect
+[ ] 7. Actualizar función clearFiles
+[ ] 8. Reemplazar todo el CSS del upload-modal
+[ ] 9. Verificar que todas las funciones auxiliares existan
+[ ] 10. Probar funcionalidad completa
+
+===============================================================================
+🎯 CARACTERÍSTICAS DEL DISEÑO FINAL
+===============================================================================
+
+✨ Interfaz inicial elegante con botón "Seleccionar archivos"
+🎴 Grid responsivo de tarjetas para archivos seleccionados
+🎨 Iconos grandes centrados con colores dinámicos
+📱 Totalmente responsivo (3 columnas → 1 columna en móvil)
+🔄 Animaciones suaves (bounce, scaleIn, hover effects)
+📊 Progreso visual mejorado con barra redondeada
+🎯 Botones contextuales (Reintentar, Subir otro)
+🎪 Header dinámico con contador y botones de acción
+🖼️ Chips de tipo de archivo coloreados
+⚡ Scroll personalizado para mejor UX
+
+===============================================================================
+📝 NOTAS ADICIONALES
+===============================================================================
+
+- El diseño está optimizado para máximo 10 archivos por subida
+- Cada archivo se sube individualmente como documento separado
+- Los colores siguen el sistema de diseño de Quasar
+- Las animaciones están optimizadas para rendimiento
+- El CSS es completamente responsivo desde 480px hasta desktop
+- Las funciones mantienen compatibilidad con la lógica existente
+
+===============================================================================
+🚀 MÓDULOS IMPLEMENTADOS
+===============================================================================
+
+✅ gerencia.vue - Referencia original
+✅ compras.vue - Trasladado completamente
+
+Pendientes de trasladar:
+- contabilidad.vue
+- controlInterno.vue
+- credito.vue
+- riesgos.vue
+- sistemas.vue
+- talentoHumano.vue
+- tesoreria.vue
+
+===============================================================================

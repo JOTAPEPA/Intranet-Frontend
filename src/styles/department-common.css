@@ -1,0 +1,72 @@
+/* Estilos comunes para DepartmentChip */
+.department-indicator {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.table-header-section {
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+    gap: 1rem;
+    padding: 1.5rem;
+    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+}
+
+.table-title-container {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+/* Colores específicos por departamento */
+
+/* Talento Humano - Rosa */
+.talento-humano .department-indicator .department-chip,
+.talento-humano .table-title-container .department-chip {
+    background: linear-gradient(135deg, #c2185b 0%, #ad1457 100%) !important;
+}
+
+/* Crédito - Índigo */
+.credito .department-indicator .department-chip,
+.credito .table-title-container .department-chip {
+    background: linear-gradient(135deg, #303f9f 0%, #283593 100%) !important;
+}
+
+/* Control Interno - Rojo */
+.control-interno .department-indicator .department-chip,
+.control-interno .table-title-container .department-chip {
+    background: linear-gradient(135deg, #d32f2f 0%, #c62828 100%) !important;
+}
+
+/* Riesgos - Ámbar */
+.riesgos .department-indicator .department-chip,
+.riesgos .table-title-container .department-chip {
+    background: linear-gradient(135deg, #ff8f00 0%, #ff6f00 100%) !important;
+}
+
+/* Compras - Verde azulado */
+.compras .department-indicator .department-chip,
+.compras .table-title-container .department-chip {
+    background: linear-gradient(135deg, #00796b 0%, #00695c 100%) !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .department-indicator {
+        margin-bottom: 0.25rem;
+    }
+    
+    .table-title-container {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+    
+    .table-header-section {
+        padding: 1rem;
+        flex-direction: column;
+        align-items: stretch;
+    }
+}

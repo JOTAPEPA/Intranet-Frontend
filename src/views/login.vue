@@ -5,8 +5,8 @@
       <div class="branding-overlay">
         <div class="branding-content">
           <div class="logo-section">
-            <div class="logo-container">
-              <q-icon name="business" size="3rem" color="white" />
+            <div class="logo-container" style=" border: 0;">
+              <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT8iGDQ6VWECRIntbY5F6ZBYz-wCHgqzXM_FA&s" alt="" style="width: 78px; border-radius: 20px;">
             </div>
             <h1 class="brand-name">Copvillanueva</h1>
             <p class="brand-tagline">Sistema de Gestión Empresarial</p>
@@ -215,9 +215,12 @@ const login = async () => {
       
       switch (userProfile) {
         case 'administrador':
-        case 'sistemas':
           console.log("Redirigiendo a admin");
           await router.push("/admin");
+          break;
+        case 'sistemas':
+          console.log("Redirigiendo a home (usuario sistemas)");
+          await router.push("/home");
           break;
         default:
           console.log("Redirigiendo a home");

@@ -28,6 +28,7 @@
                 <!-- Header -->
                 <div class="content-header">
                     <div class="header-left">
+                      
                         <h4 class="page-title">Tesorería</h4>
                         <p class="page-subtitle">Gestiona Documentos de Tesorería</p>
                     </div>
@@ -60,7 +61,15 @@
                         :rows-per-page-options="[5, 10, 20]" separator="horizontal" :loading="loading">
                         <template v-slot:top>
                             <div class="table-header-section">
-                                <h5 class="table-title">Documentos</h5>
+                                <div class="table-title-container">
+                                    <h5 class="table-title">Documentos</h5>
+                                    <DepartmentChip 
+                                        department-key="tesoreria" 
+                                        variant="table"
+                                        size="sm"
+                                        dense
+                                    />
+                                </div>
                                 <q-space />
                                 <div class="search-container">
                                     <q-input v-model="searchTerm" dense outlined
@@ -91,10 +100,17 @@
                             <q-tr :props="props" class="table-row">
                                 <q-td v-for="col in props.cols" :key="col.name" :props="props" class="table-cell">
                                     <div v-if="col.name === 'acciones'" class="action-buttons-cell">
-                                        <q-btn flat round dense icon="visibility" color="blue-7"
-                                            @click="viewDocument(props.row)" :disabled="!props.row.tieneArchivos"
-                                            class="action-btn-small">
-                                            <q-tooltip>Ver documentos</q-tooltip>
+                                        <q-btn
+                                            flat
+                                            round
+                                            color="blue-7"
+                                            icon="visibility"
+                                            size="sm"
+                                            @click="viewDocument(props.row)"
+                                            :disabled="!props.row.tieneArchivos"
+                                            class="action-btn-small"
+                                        >
+                                            <q-tooltip>Ver detalles</q-tooltip>
                                         </q-btn>
 
                                         <q-btn flat round dense icon="download" color="green-7"
@@ -123,6 +139,24 @@
                                             </div>
                                         </div>
                                     </div>
+                                    <div v-else-if="col.name === 'tipoArchivo'" class="file-type-cell">
+                                        <div v-if="props.row.tieneArchivos" class="file-type-chips">
+                                            <q-chip
+                                                v-for="tipo in getUniqueFileTypes(props.row.documentos)"
+                                                :key="tipo"
+                                                :color="getFileTypeColor(tipo)"
+                                                :text-color="getFileTypeTextColor(tipo)"
+                                                :icon="getFileTypeIcon(tipo)"
+                                                size="sm"
+                                                class="file-type-chip"
+                                            >
+                                                {{ tipo.toUpperCase() }}
+                                            </q-chip>
+                                        </div>
+                                        <q-chip v-else color="grey-3" text-color="grey-6" size="sm">
+                                            Sin archivos
+                                        </q-chip>
+                                    </div>
                                     <div v-else-if="col.name === 'cantidadArchivos'" class="files-count-cell">
                                         <q-chip :color="props.row.tieneArchivos ? 'blue' : 'grey'" text-color="white"
                                             :icon="props.row.tieneArchivos ? 'attach_file' : 'block'" size="sm">
@@ -135,7 +169,6 @@
                                 </q-td>
                             </q-tr>
                         </template>
-
                         <template v-slot:no-data>
                             <div class="full-width row flex-center q-gutter-sm text-center">
                                 <div class="no-data-content">
@@ -157,7 +190,7 @@
                 </div>
 
                 <!-- Upload Dialog -->
-                <div class="q-pa-md q-gutter-sm">
+                <div class="upload-dialog-section">
                     <q-dialog v-model="dialog" :backdrop-filter="backdropFilter">
                         <q-card class="dialog-card" style="min-width: 500px;">
                             <q-card-section class="dialog-header">
@@ -173,37 +206,53 @@
                                 <div class="upload-area" :class="{ 'drag-over': isDragOver }" @drop="onFileDrop"
                                     @dragover.prevent="isDragOver = true" @dragleave="isDragOver = false">
 
-                                    <div v-if="!selectedFile" class="upload-placeholder">
+                                    <!-- Estado inicial: sin archivos -->
+                                    <div v-if="selectedFiles.length === 0" class="upload-placeholder">
                                         <q-icon name="cloud_upload" size="3rem" color="blue-7" />
                                         <p class="upload-text">
-                                            Arrastra y suelta tu archivo aquí o
+                                            Arrastra y suelta tus archivos aquí o
                                             <label for="file-input" class="upload-link">haz clic para
                                                 seleccionar</label>
                                         </p>
                                         <p class="upload-hint">
-                                            Formatos soportados: PDF, DOC, DOCX, XLS, XLSX, JPG, PNG (máx. 10MB)
+                                            Formatos soportados: PDF, DOC, DOCX, XLS, XLSX, JPG, PNG (máx. 10MB, máx. 10 archivos)
                                         </p>
                                         <input id="file-input" type="file" ref="fileInput" @change="onFileSelect"
-                                            style="display: none" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png" />
+                                            style="display: none" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png" multiple />
                                     </div>
 
-                                    <!-- Información del archivo seleccionado -->
-                                    <div v-if="selectedFile && !isUploading" class="file-preview">
-                                        <div class="file-info">
-                                            <q-icon :name="getFileIcon(selectedFile.type)" size="2rem" color="blue-7" />
-                                            <div class="file-details">
-                                                <p class="file-name">{{ selectedFile.name }}</p>
-                                                <p class="file-size">{{ formatFileSize(selectedFile.size) }}</p>
+                                    <!-- Archivos seleccionados -->
+                                    <div v-if="selectedFiles.length > 0 && !isUploading" class="files-preview">
+                                        <div class="files-header">
+                                            <h6 class="files-count">{{ selectedFiles.length }} archivo(s) seleccionado(s)</h6>
+                                            <q-btn flat round icon="close" @click="clearFiles" size="sm" />
+                                        </div>
+                                        
+                                        <div class="files-list">
+                                            <div v-for="(file, index) in selectedFiles" :key="index" class="file-item">
+                                                <q-icon :name="getFileIcon(file.type)" size="md" color="blue-7" />
+                                                <div class="file-info">
+                                                    <div class="file-name">{{ file.name }}</div>
+                                                    <div class="file-size">{{ formatFileSize(file.size) }}</div>
+                                                </div>
                                             </div>
-                                            <q-btn flat round icon="close" @click="clearFile" />
                                         </div>
 
                                         <!-- Metadatos adicionales -->
                                         <div class="metadata-form">
-                                            <q-input v-model="documentTitle" label="Título del documento" outlined
-                                                class="q-mb-md" />
-                                            <q-textarea v-model="documentDescription" label="Descripción (opcional)"
-                                                outlined rows="3" />
+                                            <q-input 
+                                                v-model="documentTitle" 
+                                                label="Título del documento *" 
+                                                outlined
+                                                class="q-mb-md"
+                                                :rules="[val => !!val || 'El título es requerido']"
+                                            />
+                                            <q-textarea 
+                                                v-model="documentDescription" 
+                                                label="Descripción (opcional)"
+                                                outlined 
+                                                rows="3" 
+                                            />
                                         </div>
                                     </div>
 
@@ -211,7 +260,7 @@
                                     <div v-if="isUploading" class="upload-progress">
                                         <div class="progress-content">
                                             <q-icon name="cloud_upload" size="2rem" color="blue-7" />
-                                            <p class="progress-text">Subiendo archivo...</p>
+                                            <p class="progress-text">Subiendo {{ selectedFiles.length }} archivo(s)...</p>
                                             <q-linear-progress :value="uploadProgress / 100" color="blue-7" size="8px"
                                                 class="q-mt-md" />
                                             <p class="progress-percentage">{{ uploadProgress }}%</p>
@@ -222,12 +271,12 @@
                                     <div v-if="uploadResult" class="upload-result">
                                         <div v-if="uploadResult.success" class="success-result">
                                             <q-icon name="check_circle" size="2rem" color="green" />
-                                            <p class="result-text">¡Archivo subido exitosamente!</p>
-                                            <p class="result-details">El documento se ha guardado en el sistema.</p>
+                                            <p class="result-text">¡{{ uploadResult.filesUploaded }} archivo(s) subido(s) exitosamente!</p>
+                                            <p class="result-details">Los documentos se han guardado en el sistema.</p>
                                         </div>
                                         <div v-else class="error-result">
                                             <q-icon name="error" size="2rem" color="red" />
-                                            <p class="result-text">Error al subir el archivo</p>
+                                            <p class="result-text">Error al subir archivos</p>
                                             <p class="result-details">{{ uploadResult.error }}</p>
                                         </div>
                                     </div>
@@ -236,11 +285,21 @@
 
                             <q-card-actions class="dialog-actions">
                                 <q-btn flat label="Cancelar" color="grey-7" @click="closeDialog" />
-                                <q-btn v-if="selectedFile && !isUploading && !uploadResult" unelevated
-                                    label="Subir Archivo" color="primary" @click="uploadFile"
-                                    :disabled="!documentTitle" />
-                                <q-btn v-if="uploadResult" unelevated label="Subir Otro" color="primary"
-                                    @click="resetUpload" />
+                                <q-btn 
+                                    v-if="selectedFiles.length > 0 && !isUploading && !uploadResult" 
+                                    unelevated
+                                    label="Subir Archivos" 
+                                    color="primary" 
+                                    @click="uploadFiles"
+                                    :disabled="!documentTitle || selectedFiles.length === 0" 
+                                />
+                                <q-btn 
+                                    v-if="uploadResult" 
+                                    unelevated 
+                                    label="Subir Otros" 
+                                    color="primary"
+                                    @click="resetUpload" 
+                                />
                             </q-card-actions>
                         </q-card>
                     </q-dialog>
@@ -327,16 +386,16 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { computed, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { getData } from '../services/apiClient.js'
 import { useAuth } from '../stores/store.js'
 import { useRouter } from 'vue-router'
-import CloudinaryService from '../services/cloudinaryService.js'
+import axios from 'axios'
+import DepartmentChip from '../components/DepartmentChip.vue'
 
 const router = useRouter()
 
-// Función para mostrar notificaciones (temporal)
+// Función para mostrar notificaciones
 function showNotification(type, message, caption = '') {
     const fullMessage = caption ? `${message}\n${caption}` : message
     if (type === 'positive') {
@@ -348,12 +407,12 @@ function showNotification(type, message, caption = '') {
     }
 }
 
-// Estados reactivos para el diálogo
+// Estados reactivos principales
 const dialog = ref(false)
 const backdropFilter = ref('blur(4px) saturate(150%)')
 
 // Estados para la subida de archivos
-const selectedFile = ref(null)
+const selectedFiles = ref([])
 const isUploading = ref(false)
 const uploadProgress = ref(0)
 const uploadResult = ref(null)
@@ -374,278 +433,24 @@ const selectedDocumentForView = ref(null)
 // Referencia al input de archivo
 const fileInput = ref(null)
 
-/**
- * Recarga la lista de documentos
- */
-async function loadDocuments() {
-    await getDocuments();
-}
-
-/**
- * Busca documentos según el término ingresado
- */
-async function searchDocuments() {
-    if (!searchTerm.value) {
-        await loadDocuments();
-        return;
-    }
-
-    try {
-        loading.value = true;
-        console.log('🔍 Buscando documentos:', searchTerm.value);
-
-        // Filtrar documentos localmente
-        const searchTermLower = searchTerm.value.toLowerCase();
-        const allDocuments = await getData('/tesoreria');
-
-        if (allDocuments && Array.isArray(allDocuments)) {
-            const filteredDocuments = allDocuments.filter(doc => {
-                // Buscar en el título del documento
-                if (doc.documento && doc.documento.toLowerCase().includes(searchTermLower)) {
-                    return true;
-                }
-
-                // Buscar en los nombres de archivos
-                if (doc.documentos && doc.documentos.length > 0) {
-                    return doc.documentos.some(archivo =>
-                        archivo.originalName && archivo.originalName.toLowerCase().includes(searchTermLower)
-                    );
-                }
-
-                return false;
-            });
-
-            // Procesar los datos filtrados
-            rows.value = filteredDocuments.map(doc => ({
-                ...doc,
-                tieneArchivos: doc.documentos && doc.documentos.length > 0,
-                cantidadArchivos: doc.documentos ? doc.documentos.length : 0,
-                archivos: doc.documentos ? doc.documentos.map(archivo => ({
-                    id: archivo._id,
-                    nombre: archivo.originalName,
-                    url: archivo.url,
-                    tamaño: formatFileSize(archivo.bytes),
-                    formato: archivo.format,
-                    fechaSubida: new Date(archivo.uploadDate).toLocaleDateString('es-ES'),
-                    public_id: archivo.public_id
-                })) : []
-            }));
-        }
-
-        console.log('✅ Búsqueda completada:', rows.value.length, 'resultados');
-
-    } catch (error) {
-        console.error('❌ Error en búsqueda:', error);
-        showNotification('negative', 'Error en la búsqueda', 'No se pudo realizar la búsqueda');
-    } finally {
-        loading.value = false;
-    }
-}
-
-/**
- * Limpia la búsqueda y recarga todos los documentos
- */
-async function clearSearch() {
-    searchTerm.value = '';
-    await loadDocuments();
-}
-
-/**
- * Descarga un archivo individual
- */
-function downloadSingleFile(file) {
-    try {
-        console.log('📥 Descargando archivo:', file.nombre);
-
-        const link = document.createElement('a');
-        link.href = file.url;
-        link.download = file.nombre;
-        link.target = '_blank';
-
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-
-        showNotification('positive', 'Descarga iniciada', `Descargando: ${file.nombre}`);
-
-    } catch (error) {
-        console.error('❌ Error descargando archivo:', error);
-        showNotification('negative', 'Error en descarga', 'No se pudo descargar el archivo');
-    }
-}
-
-/**
- * Abre un archivo en una nueva pestaña
- */
-function openFileInNewTab(file) {
-    try {
-        console.log('🔗 Abriendo archivo en nueva pestaña:', file.nombre);
-        window.open(file.url, '_blank');
-    } catch (error) {
-        console.error('❌ Error abriendo archivo:', error);
-        showNotification('negative', 'Error', 'No se pudo abrir el archivo');
-    }
-}
-
-/**
- * Obtiene el icono del archivo según su nombre/extensión
- */
-function getFileIconByName(fileName) {
-    if (!fileName) return 'insert_drive_file';
-
-    const extension = fileName.split('.').pop()?.toLowerCase() || '';
-    const iconMap = {
-        'pdf': 'picture_as_pdf',
-        'doc': 'description',
-        'docx': 'description',
-        'xls': 'table_chart',
-        'xlsx': 'table_chart',
-        'jpg': 'image',
-        'jpeg': 'image',
-        'png': 'image',
-        'gif': 'image',
-        'txt': 'text_snippet',
-        'zip': 'archive',
-        'rar': 'archive'
-    };
-
-    return iconMap[extension] || 'insert_drive_file';
-}
-
-/**
- * Obtiene el color del icono según el formato del archivo
- */
-function getFileColor(format) {
-    if (!format) return 'grey-6';
-
-    const colorMap = {
-        'pdf': 'red-6',
-        'doc': 'blue-6',
-        'docx': 'blue-6',
-        'xls': 'green-6',
-        'xlsx': 'green-6',
-        'jpg': 'purple-6',
-        'jpeg': 'purple-6',
-        'png': 'purple-6',
-        'gif': 'purple-6',
-        'txt': 'orange-6'
-    };
-
-    return colorMap[format.toLowerCase()] || 'grey-6';
-}
-
-/**
- * Ver documentos de un registro
- */
-function viewDocument(document) {
-    if (!document.tieneArchivos) {
-        showNotification('negative', 'Sin archivos', 'Este documento no tiene archivos adjuntos');
-        return;
-    }
-
-    console.log('👁️ Ver documento:', document);
-
-    // Preparar los datos para el modal de vista
-    selectedDocumentForView.value = {
-        ...document,
-        titulo: document.documento,
-        fechaCreacion: new Date(document.createdAt).toLocaleDateString('es-ES', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        })
-    };
-
-    viewDocumentDialog.value = true;
-}
-
-/**
- * Descargar documentos de un registro
- */
-async function downloadDocuments(document) {
-    if (!document.tieneArchivos) {
-        showNotification('negative', 'Sin archivos', 'Este documento no tiene archivos para descargar');
-        return;
-    }
-
-    try {
-        console.log('📥 Descargando archivos del documento:', document.titulo);
-
-        // Descargar cada archivo
-        for (const file of document.archivos) {
-            const link = document.createElement('a');
-            link.href = file.url;
-            link.download = file.nombre;
-            link.target = '_blank';
-
-            // Agregar al DOM temporalmente
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-
-            // Pequeña pausa entre descargas
-            await new Promise(resolve => setTimeout(resolve, 500));
-        }
-
-        showNotification('positive', 'Descarga iniciada', `Se están descargando ${document.archivos.length} archivo(s)`);
-
-    } catch (error) {
-        console.error('❌ Error descargando archivos:', error);
-        showNotification('negative', 'Error en descarga', 'No se pudieron descargar los archivos');
-    }
-}
-
-/**
- * Eliminar documento
- */
-async function deleteDocument(document) {
-    // Confirmación del usuario
-    const confirmMessage = `¿Estás seguro de que quieres eliminar el documento "${document.documento}"?\n\n` +
-        `Este documento contiene ${document.cantidadArchivos} archivo(s).\n` +
-        `Esta acción no se puede deshacer.`;
-
-    if (!confirm(confirmMessage)) {
-        return;
-    }
-
-    try {
-        console.log('🗑️ Eliminando documento:', document._id);
-
-        loading.value = true;
-
-        // Hacer petición DELETE al backend
-        const response = await fetch(`http://localhost:3001/api/tesoreria/${document._id}`, {
-            method: 'DELETE',
-            headers: {
-                'Content-Type': 'application/json',
-            }
-        });
-
-        if (response.ok) {
-            showNotification('positive', 'Documento eliminado', 'El documento y sus archivos han sido eliminados exitosamente');
-
-            // Recargar la lista de documentos
-            await loadDocuments();
-        } else {
-            throw new Error('Error en la respuesta del servidor');
-        }
-
-    } catch (error) {
-        console.error('❌ Error eliminando documento:', error);
-        showNotification('negative', 'Error al eliminar', 'No se pudo eliminar el documento');
-    } finally {
-        loading.value = false;
-    }
-}
-
+// Configuración de columnas para la tabla
 const columns = ref([
     {
         name: "titulo",
         align: "left",
         label: "Título del Documento",
         field: "documento",
+        sortable: true,
+    },
+    {
+        name: "tipoArchivo",
+        align: "center",
+        label: "Tipo de Archivo",
+        field: row => {
+            if (!row.documentos || row.documentos.length === 0) return 'Sin archivos';
+            const tipos = [...new Set(row.documentos.map(doc => getFileExtension(doc.originalName)))];
+            return tipos.filter(tipo => tipo !== 'desconocido').join(', ') || 'Desconocido';
+        },
         sortable: true,
     },
     {
@@ -678,6 +483,7 @@ const columns = ref([
         sortable: false,
     }
 ])
+
 const rows = ref([])
 
 /**
@@ -714,22 +520,75 @@ function closeDialog() {
  * Resetea el estado de subida
  */
 function resetUpload() {
-    selectedFile.value = null
+    selectedFiles.value = []
     isUploading.value = false
     uploadProgress.value = 0
     uploadResult.value = null
     isDragOver.value = false
     documentTitle.value = ''
     documentDescription.value = ''
+    
+    // Limpiar el input de archivo
+    if (fileInput.value) {
+        fileInput.value.value = ''
+    }
 }
 
 /**
- * Maneja la selección de archivo
+ * Obtiene todos los documentos de tesorería
+ */
+async function getDocuments() {
+    try {
+        loading.value = true
+        console.log('📥 Obteniendo documentos de tesorería...')
+        
+        const response = await axios.get('http://localhost:5000/api/tesoreria')
+        
+        if (response.data && Array.isArray(response.data)) {
+            rows.value = response.data.map(doc => ({
+                ...doc,
+                tieneArchivos: doc.documentos && doc.documentos.length > 0,
+                cantidadArchivos: doc.documentos ? doc.documentos.length : 0,
+                archivos: doc.documentos ? doc.documentos.map(archivo => ({
+                    id: archivo._id,
+                    nombre: archivo.originalName,
+                    url: archivo.downloadURL,
+                    tamaño: formatFileSize(archivo.size),
+                    formato: getFileExtension(archivo.originalName),
+                    fechaSubida: new Date(archivo.uploadDate).toLocaleDateString('es-ES'),
+                    firebaseRef: archivo.firebaseRef,
+                    mimetype: archivo.mimetype
+                })) : []
+            }))
+            
+            console.log('✅ Documentos cargados:', rows.value.length)
+        } else {
+            console.warn('⚠️ Estructura de respuesta inesperada')
+            rows.value = []
+        }
+    } catch (error) {
+        console.error('❌ Error al obtener documentos:', error)
+        showNotification('negative', 'Error al cargar', 'No se pudieron cargar los documentos')
+        rows.value = []
+    } finally {
+        loading.value = false
+    }
+}
+
+/**
+ * Recarga la lista de documentos
+ */
+async function loadDocuments() {
+    await getDocuments()
+}
+
+/**
+ * Maneja la selección de archivos
  */
 function onFileSelect(event) {
-    const file = event.target.files[0]
-    if (file) {
-        handleFileSelection(file)
+    const files = Array.from(event.target.files)
+    if (files.length > 0) {
+        handleMultipleFileSelection(files)
     }
 }
 
@@ -739,182 +598,725 @@ function onFileSelect(event) {
 function onFileDrop(event) {
     event.preventDefault()
     isDragOver.value = false
-
-    const files = event.dataTransfer.files
+    
+    const files = Array.from(event.dataTransfer.files)
     if (files.length > 0) {
-        handleFileSelection(files[0])
+        handleMultipleFileSelection(files)
     }
 }
 
 /**
- * Procesa el archivo seleccionado
+ * Procesa múltiples archivos seleccionados
  */
-function handleFileSelection(file) {
-    // Validar tipo de archivo
-    if (!CloudinaryService.validateFileType(file)) {
-        showNotification('negative', 'Tipo de archivo no permitido', 'Solo se permiten archivos PDF, DOC, DOCX, XLS, XLSX, JPG, PNG')
+function handleMultipleFileSelection(files) {
+    const validFiles = []
+    
+    // Validar cada archivo
+    for (const file of files) {
+        if (!validateFileType(file)) {
+            showNotification('negative', `Archivo ${file.name} no permitido`, 'Solo se permiten archivos PDF, DOC, DOCX, XLS, XLSX, JPG, PNG')
+            continue
+        }
+        
+        if (file.size > 10 * 1024 * 1024) { // 10MB
+            showNotification('negative', `Archivo ${file.name} demasiado grande`, 'El tamaño máximo permitido es 10MB')
+            continue
+        }
+        
+        validFiles.push(file)
+    }
+    
+    if (validFiles.length > 10) {
+        showNotification('negative', 'Demasiados archivos', 'Solo se permiten máximo 10 archivos por subida')
         return
     }
-
-    // Validar tamaño de archivo
-    if (!CloudinaryService.validateFileSize(file, 10)) {
-        showNotification('negative', 'Archivo demasiado grande', 'El tamaño máximo permitido es 10MB')
-        return
+    
+    if (validFiles.length > 0) {
+        selectedFiles.value = validFiles
+        
+        // Usar nombre del primer archivo como título por defecto
+        if (!documentTitle.value && validFiles.length > 0) {
+            documentTitle.value = validFiles[0].name.split('.')[0]
+        }
     }
-
-    selectedFile.value = file
-    documentTitle.value = file.name.split('.')[0] // Usar nombre del archivo sin extensión como título por defecto
 }
 
 /**
- * Limpia el archivo seleccionado
+ * Limpia los archivos seleccionados
  */
-function clearFile() {
-    selectedFile.value = null
-    documentTitle.value = ''
-    documentDescription.value = ''
+function clearFiles() {
+    selectedFiles.value = []
     if (fileInput.value) {
         fileInput.value.value = ''
     }
 }
 
 /**
- * Sube el archivo a través del servicio
+ * Valida el tipo de archivo
  */
-async function uploadFile() {
-    if (!selectedFile.value || !documentTitle.value) {
+function validateFileType(file) {
+    const allowedTypes = [
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'image/jpeg',
+        'image/jpg', 
+        'image/png'
+    ]
+    return allowedTypes.includes(file.type)
+}
+
+/**
+ * Sube los archivos seleccionados al servidor
+ */
+async function uploadFiles() {
+    if (selectedFiles.value.length === 0 || !documentTitle.value) {
+        showNotification('negative', 'Datos incompletos', 'Selecciona al menos un archivo y proporciona un título')
         return
     }
-
-    isUploading.value = true
-    uploadProgress.value = 0
-    uploadResult.value = null
-
+    
     try {
-        console.log('📤 Iniciando subida de archivo:', {
-            archivo: selectedFile.value.name,
-            titulo: documentTitle.value,
-            descripcion: documentDescription.value,
-            tamaño: selectedFile.value.size
-        });
-
-        const metadata = {
-            title: documentTitle.value,
-            description: documentDescription.value,
-            category: 'tesoreria'
-        }
-
-        const result = await CloudinaryService.uploadToBackend(
-            selectedFile.value,
-            metadata,
-            (progress) => {
-                uploadProgress.value = progress
+        isUploading.value = true
+        uploadProgress.value = 0
+        
+        const formData = new FormData()
+        formData.append('documento', documentTitle.value)
+        
+        // Agregar todos los archivos seleccionados
+        selectedFiles.value.forEach(file => {
+            formData.append('documentos', file)
+        })
+        
+        console.log('📤 Subiendo archivos de tesorería:', {
+            cantidad: selectedFiles.value.length,
+            archivos: selectedFiles.value.map(file => ({
+                nombre: file.name,
+                tipo: file.type,
+                tamaño: file.size
+            })),
+            titulo: documentTitle.value
+        })
+        
+        // Usar axios directamente para tener control del progreso
+        const response = await axios.post(
+            'http://localhost:5000/api/tesoreria',
+            formData,
+            {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                },
+                onUploadProgress: (progressEvent) => {
+                    const percentCompleted = Math.round(
+                        (progressEvent.loaded * 100) / progressEvent.total
+                    )
+                    uploadProgress.value = percentCompleted
+                },
             }
         )
-
-        uploadResult.value = result
-
-        if (result.success) {
-            showNotification('positive', 'Archivo subido exitosamente', 'El documento se ha guardado en el sistema')
-
-            // Recargar la lista de documentos para mostrar el nuevo documento
-            await loadDocuments()
-
-            // Cerrar el diálogo después de un breve retraso
-            setTimeout(() => {
-                closeDialog()
-            }, 1500)
-        } else {
-            showNotification('negative', 'Error al subir archivo', result.error || 'Ocurrió un error inesperado')
+        
+        console.log('✅ Archivos subidos exitosamente:', response.data)
+        
+        uploadResult.value = {
+            success: true,
+            data: response.data,
+            filesUploaded: selectedFiles.value.length
         }
-
+        
+        const message = selectedFiles.value.length === 1 
+            ? 'Archivo subido exitosamente' 
+            : `${selectedFiles.value.length} archivos subidos exitosamente`
+        
+        showNotification('positive', message, 'Los documentos han sido guardados en el sistema')
+        
+        // Recargar la lista de documentos
+        await loadDocuments()
+        
+        // Cerrar modal después de un breve delay
+        setTimeout(() => {
+            closeDialog()
+        }, 1500)
+        
     } catch (error) {
-        console.error('Error uploading file:', error)
+        console.error('❌ Error al subir archivos:', error)
+        
+        let errorMessage = 'Error desconocido'
+        if (error.response?.data?.message) {
+            errorMessage = error.response.data.message
+        } else if (error.message) {
+            errorMessage = error.message
+        }
+        
         uploadResult.value = {
             success: false,
-            error: 'Error de conexión. Inténtalo de nuevo.'
+            error: errorMessage
         }
-
-        showNotification('negative', 'Error de conexión', 'No se pudo conectar con el servidor')
+        
+        showNotification('negative', 'Error al subir archivos', errorMessage)
     } finally {
         isUploading.value = false
     }
 }
 
 /**
- * Obtiene el icono según el tipo de archivo
+ * Busca documentos según el término ingresado
  */
-function getFileIcon(fileType) {
-    if (fileType.includes('pdf')) return 'picture_as_pdf'
-    if (fileType.includes('word') || fileType.includes('document')) return 'description'
-    if (fileType.includes('sheet') || fileType.includes('excel')) return 'table_chart'
-    if (fileType.includes('image')) return 'image'
-    return 'insert_drive_file'
-}
-
-/**
- * Formatea el tamaño del archivo
- */
-function formatFileSize(bytes) {
-    return CloudinaryService.formatFileSize(bytes)
-}
-
-function handleLogout() {
-    // Usar el store para cerrar sesión correctamente
-    const authStore = useAuth()
-    authStore.logOut()
-
-    // Redirigir al login
-    router.push('/')
-}
-
-async function getDocuments() {
+async function searchDocuments() {
+    if (!searchTerm.value) {
+        await loadDocuments()
+        return
+    }
+    
     try {
-        loading.value = true;
-        console.log('📥 Cargando documentos de tesoreria...');
-
-        const response = await getData('/tesoreria');
-
-        if (response && Array.isArray(response)) {
-            // Procesar los datos para añadir propiedades calculadas
-            rows.value = response.map(doc => ({
+        loading.value = true
+        console.log('� Buscando documentos de tesorería:', searchTerm.value)
+        
+        // Obtener todos los documentos y filtrar localmente
+        const allDocuments = await getData('/tesoreria')
+        
+        if (allDocuments && Array.isArray(allDocuments)) {
+            const searchTermLower = searchTerm.value.toLowerCase()
+            const filteredDocuments = allDocuments.filter(doc => {
+                // Buscar en el título del documento
+                if (doc.documento && doc.documento.toLowerCase().includes(searchTermLower)) {
+                    return true
+                }
+                
+                // Buscar en los nombres de archivos
+                if (doc.documentos && doc.documentos.length > 0) {
+                    return doc.documentos.some(archivo =>
+                        archivo.originalName && archivo.originalName.toLowerCase().includes(searchTermLower)
+                    )
+                }
+                
+                return false
+            })
+            
+            // Procesar los datos filtrados con el mismo formato que getDocuments
+            rows.value = filteredDocuments.map(doc => ({
                 ...doc,
                 tieneArchivos: doc.documentos && doc.documentos.length > 0,
                 cantidadArchivos: doc.documentos ? doc.documentos.length : 0,
                 archivos: doc.documentos ? doc.documentos.map(archivo => ({
                     id: archivo._id,
                     nombre: archivo.originalName,
-                    url: archivo.url,
-                    tamaño: formatFileSize(archivo.bytes),
-                    formato: archivo.format,
+                    url: archivo.downloadURL,
+                    tamaño: formatFileSize(archivo.size),
+                    formato: getFileExtension(archivo.originalName),
                     fechaSubida: new Date(archivo.uploadDate).toLocaleDateString('es-ES'),
-                    public_id: archivo.public_id
+                    firebaseRef: archivo.firebaseRef,
+                    mimetype: archivo.mimetype
                 })) : []
-            }));
-
-            console.log('✅ Documentos cargados:', rows.value.length);
-        } else {
-            console.log('⚠️ La respuesta no contiene los datos esperados');
-            rows.value = [];
+            }))
         }
-    } catch (err) {
-        console.error('❌ Error al obtener los documentos:', err);
-        showNotification('negative', 'Error al cargar documentos', 'No se pudieron obtener los documentos');
-        rows.value = [];
+        
+        console.log('✅ Búsqueda completada:', rows.value.length, 'resultados')
+        
+    } catch (error) {
+        console.error('❌ Error en búsqueda:', error)
+        showNotification('negative', 'Error en la búsqueda', 'No se pudo realizar la búsqueda')
     } finally {
-        loading.value = false;
+        loading.value = false
     }
 }
 
+/**
+ * Limpia la búsqueda y recarga todos los documentos
+ */
+async function clearSearch() {
+    searchTerm.value = ''
+    await loadDocuments()
+}
+
+/**
+ * Ver documentos de un registro
+ */
+function viewDocument(document) {
+    if (!document.tieneArchivos) {
+        showNotification('negative', 'Sin archivos', 'Este documento no tiene archivos adjuntos')
+        return
+    }
+    
+    console.log('👁️ Ver documento:', document)
+    
+    // Preparar los datos para el modal de vista
+    selectedDocumentForView.value = {
+        ...document,
+        titulo: document.documento,
+        fechaCreacion: new Date(document.createdAt).toLocaleDateString('es-ES', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        })
+    }
+    
+    viewDocumentDialog.value = true
+}
+
+/**
+ * Descarga documentos usando las URLs de Firebase Storage
+ */
+async function downloadDocuments(doc) {
+    try {
+        console.log('📥 Descargando documentos de tesorería para ID:', doc._id)
+        
+        if (!doc.archivos || doc.archivos.length === 0) {
+            showNotification('warning', 'Sin archivos', 'No hay archivos para descargar')
+            return
+        }
+        
+        // Descargar cada archivo usando su URL directa
+        doc.archivos.forEach(archivo => {
+            const link = document.createElement('a')
+            link.href = archivo.url
+            link.download = archivo.nombre
+            link.target = '_blank'
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+        })
+        
+        showNotification('positive', 'Descarga iniciada', `Se han descargado ${doc.archivos.length} archivo(s)`)
+        
+    } catch (error) {
+        console.error('❌ Error downloading documents:', error)
+        showNotification('negative', 'Error de descarga', 'No se pudieron descargar los documentos')
+    }
+}
+
+/**
+ * Descarga un archivo individual
+ */
+function downloadSingleFile(file) {
+    try {
+        console.log('📥 Descargando archivo individual:', file.nombre)
+        
+        const link = document.createElement('a')
+        link.href = file.url
+        link.download = file.nombre
+        link.target = '_blank'
+        
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        
+        showNotification('positive', 'Descarga iniciada', `Descargando: ${file.nombre}`)
+        
+    } catch (error) {
+        console.error('❌ Error descargando archivo:', error)
+        showNotification('negative', 'Error en descarga', 'No se pudo descargar el archivo')
+    }
+}
+
+/**
+ * Abre un archivo en una nueva pestaña
+ */
+function openFileInNewTab(file) {
+    try {
+        console.log('🔗 Abriendo archivo en nueva pestaña:', file.nombre)
+        window.open(file.url, '_blank')
+    } catch (error) {
+        console.error('❌ Error abriendo archivo:', error)
+        showNotification('negative', 'Error', 'No se pudo abrir el archivo')
+    }
+}
+
+/**
+ * Eliminar documento
+ */
+async function deleteDocument(document) {
+    const confirmMessage = `¿Estás seguro de que quieres eliminar el documento "${document.documento}"?\n\n` +
+        `Este documento contiene ${document.cantidadArchivos} archivo(s).\n` +
+        `Esta acción no se puede deshacer.`
+    
+    if (!confirm(confirmMessage)) {
+        return
+    }
+    
+    try {
+        console.log('🗑️ Eliminando documento de tesorería:', document._id)
+        
+        loading.value = true
+        
+        // Hacer petición DELETE al backend
+        const response = await axios.delete(`http://localhost:5000/api/tesoreria/${document._id}`)
+        
+        if (response.status === 200) {
+            showNotification('positive', 'Documento eliminado', 'El documento y sus archivos han sido eliminados exitosamente')
+            
+            // Recargar la lista de documentos
+            await loadDocuments()
+        } else {
+            throw new Error('Error en la respuesta del servidor')
+        }
+        
+    } catch (error) {
+        console.error('❌ Error eliminando documento:', error)
+        const errorMessage = error.response?.data?.message || 'No se pudo eliminar el documento'
+        showNotification('negative', 'Error al eliminar', errorMessage)
+    } finally {
+        loading.value = false
+    }
+}
+
+/**
+ * Obtiene los tipos únicos de archivos de un array de documentos
+ */
+function getUniqueFileTypes(documentos) {
+    if (!documentos || documentos.length === 0) return []
+    const tipos = [...new Set(documentos.map(doc => getFileExtension(doc.originalName)))]
+    return tipos.filter(tipo => tipo !== 'desconocido')
+}
+
+/**
+ * Obtiene el color de fondo para un tipo de archivo
+ */
+function getFileTypeColor(tipo) {
+    const colorMap = {
+        'pdf': 'red-1',
+        'doc': 'blue-1',
+        'docx': 'blue-1',
+        'xls': 'green-1',
+        'xlsx': 'green-1',
+        'jpg': 'purple-1',
+        'jpeg': 'purple-1',
+        'png': 'purple-1',
+        'txt': 'grey-1'
+    }
+    return colorMap[tipo.toLowerCase()] || 'orange-1'
+}
+
+/**
+ * Obtiene el color del texto para un tipo de archivo
+ */
+function getFileTypeTextColor(tipo) {
+    const colorMap = {
+        'pdf': 'red-8',
+        'doc': 'blue-8',
+        'docx': 'blue-8',
+        'xls': 'green-8',
+        'xlsx': 'green-8',
+        'jpg': 'purple-8',
+        'jpeg': 'purple-8',
+        'png': 'purple-8',
+        'txt': 'grey-8'
+    }
+    return colorMap[tipo.toLowerCase()] || 'orange-8'
+}
+
+/**
+ * Obtiene el icono para un tipo de archivo
+ */
+function getFileTypeIcon(tipo) {
+    const iconMap = {
+        'pdf': 'picture_as_pdf',
+        'doc': 'description',
+        'docx': 'description',
+        'xls': 'table_chart',
+        'xlsx': 'table_chart',
+        'jpg': 'image',
+        'jpeg': 'image',
+        'png': 'image',
+        'txt': 'text_snippet'
+    }
+    return iconMap[tipo.toLowerCase()] || 'insert_drive_file'
+}
+
+/**
+ * Obtiene el icono del archivo según su nombre/extensión
+ */
+function getFileIconByName(fileName) {
+    if (!fileName) return 'insert_drive_file'
+    
+    const extension = fileName.split('.').pop()?.toLowerCase() || ''
+    const iconMap = {
+        'pdf': 'picture_as_pdf',
+        'doc': 'description',
+        'docx': 'description',
+        'xls': 'table_chart',
+        'xlsx': 'table_chart',
+        'jpg': 'image',
+        'jpeg': 'image',
+        'png': 'image',
+        'gif': 'image',
+        'txt': 'text_snippet',
+        'zip': 'archive',
+        'rar': 'archive'
+    }
+    
+    return iconMap[extension] || 'insert_drive_file'
+}
+
+/**
+ * Obtiene el color del icono según el formato del archivo
+ */
+function getFileColor(format) {
+    if (!format) return 'grey-6'
+    
+    const colorMap = {
+        'pdf': 'red-6',
+        'doc': 'blue-6',
+        'docx': 'blue-6',
+        'xls': 'green-6',
+        'xlsx': 'green-6',
+        'jpg': 'purple-6',
+        'jpeg': 'purple-6',
+        'png': 'purple-6',
+        'gif': 'purple-6',
+        'txt': 'orange-6'
+    }
+    
+    return colorMap[format.toLowerCase()] || 'grey-6'
+}
+
+/**
+ * Obtiene el icono del archivo según su tipo MIME
+ */
+function getFileIcon(mimeType) {
+    const iconMap = {
+        'application/pdf': 'picture_as_pdf',
+        'application/msword': 'description',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'description',
+        'application/vnd.ms-excel': 'table_chart',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'table_chart',
+        'text/plain': 'text_snippet',
+        'text/csv': 'table_chart',
+        'image/jpeg': 'image',
+        'image/jpg': 'image',
+        'image/png': 'image',
+        'image/gif': 'image',
+        'image/webp': 'image'
+    }
+    return iconMap[mimeType] || 'insert_drive_file'
+}
+
+/**
+ * Formatea el tamaño de archivo en bytes a una representación legible
+ */
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes'
+    const k = 1024
+    const sizes = ['Bytes', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
+/**
+ * Obtiene la extensión de un archivo
+ */
+function getFileExtension(fileName) {
+    if (!fileName) return 'desconocido'
+    const extension = fileName.split('.').pop()?.toLowerCase() || 'desconocido'
+    return extension
+}
+
+/**
+ * Maneja el logout del usuario
+ */
+function handleLogout() {
+    const authStore = useAuth()
+    authStore.logOut()
+    router.push('/')
+}
+
+// Función para obtener datos cuando el componente se monta
 onMounted(() => {
-    loadDocuments();
-});
+    getDocuments()
+})
 </script>
 
 <style scoped>
-* {
+/* Estilos específicos para los chips de tipo de archivo */
+.file-type-cell {
+    text-align: center;
+}
+
+.file-type-chips {
+    display: flex;
+    gap: 0.25rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.file-type-chip {
+    font-weight: 600;
+    border-radius: 6px;
+    height: 24px;
+    font-size: 0.7rem;
+}
+
+/* Estilos para upload múltiple */
+.files-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.files-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem;
+    background: var(--light-gray);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.files-count {
     margin: 0;
-    padding: 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.files-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.5rem;
+}
+
+.file-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem;
+    background: var(--white);
+    border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.file-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.file-name {
+    font-weight: 500;
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    word-break: break-word;
+    line-height: 1.3;
+}
+
+.file-size {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    margin-top: 0.125rem;
+}
+
+.metadata-form {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+}
+
+/* Mejoras en los estilos existentes */
+.upload-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    padding: 2rem;
+}
+
+.upload-text {
+    font-size: 1rem;
+    color: var(--text-primary);
+    margin: 0;
+    text-align: center;
+}
+
+.upload-link {
+    color: var(--primary-blue);
+    cursor: pointer;
+    text-decoration: underline;
+    font-weight: 500;
+}
+
+.upload-link:hover {
+    color: var(--blue-gradient-end);
+}
+
+.upload-hint {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin: 0;
+    text-align: center;
+    line-height: 1.4;
+}
+
+/* Estados mejorados para progress y results */
+.upload-progress {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    padding: 2rem;
+}
+
+.progress-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+}
+
+.progress-text {
+    font-weight: 500;
+    color: var(--text-primary);
+    margin: 0;
+    text-align: center;
+}
+
+.progress-percentage {
+    font-weight: 600;
+    color: var(--primary-blue);
+    font-size: 1.1rem;
+    margin: 0;
+}
+
+.upload-result {
+    display: flex;
+    justify-content: center;
+    padding: 2rem;
+}
+
+.success-result,
+.error-result {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    text-align: center;
+}
+
+.result-text {
+    font-weight: 600;
+    font-size: 1.1rem;
+    margin: 0;
+}
+
+.success-result .result-text {
+    color: #2e7d32;
+}
+
+.error-result .result-text {
+    color: #c62828;
+}
+
+.result-details {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin: 0;
 }
 
 /* [Estilos compartidos - mismo CSS que los otros módulos] */
@@ -1881,5 +2283,36 @@ onMounted(() => {
     .header-actions {
         align-self: flex-end;
     }
+}
+
+/* Estilos comunes para DepartmentChip */
+.department-indicator {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.table-header-section {
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+    gap: 1rem;
+    padding: 1.5rem;
+    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+}
+
+.table-title-container {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+/* Estilos específicos para tesorería */
+.department-indicator .department-chip {
+    background: linear-gradient(135deg, #f57c00 0%, #ef6c00 100%) !important;
+}
+
+.table-title-container .department-chip {
+    background: linear-gradient(135deg, #f57c00 0%, #ef6c00 100%) !important;
 }
 </style>

@@ -25,22 +25,6 @@
                 />
                 <q-btn 
                     flat 
-                    icon="description" 
-                    label="Documentos" 
-                    align="left"
-                    class="menu-item"
-                    no-caps 
-                />
-                <q-btn 
-                    flat 
-                    icon="people" 
-                    label="Usuarios" 
-                    align="left"
-                    class="menu-item"
-                    no-caps 
-                />
-                <q-btn 
-                    flat 
                     icon="settings" 
                     label="Configuración" 
                     align="left"
@@ -179,6 +163,48 @@
                             </q-input>
                         </div>
                     </template>
+
+                    <template v-slot:body-cell-estado="props">
+                        <q-td :props="props">
+                            <q-badge 
+                                :color="props.row.estado ? 'green' : 'red'"
+                                :label="props.row.estado ? 'Activo' : 'Inactivo'"
+                                class="status-badge"
+                            />
+                        </q-td>
+                    </template>
+
+                    <template v-slot:body-cell-acciones="props">
+                        <q-td :props="props">
+                            <div class="action-buttons">
+                                <q-btn
+                                    flat
+                                    round
+                                    icon="edit"
+                                    color="blue-7"
+                                    size="sm"
+                                    @click="openEditDialog(props.row)"
+                                    class="action-btn-small"
+                                >
+                                    <q-tooltip>Editar Usuario</q-tooltip>
+                                </q-btn>
+                                
+                                <q-btn
+                                    flat
+                                    round
+                                    :icon="props.row.estado ? 'block' : 'check_circle'"
+                                    :color="props.row.estado ? 'red-6' : 'green-6'"
+                                    size="sm"
+                                    @click="toggleUserStatus(props.row)"
+                                    class="action-btn-small"
+                                >
+                                    <q-tooltip>
+                                        {{ props.row.estado ? 'Desactivar Usuario' : 'Activar Usuario' }}
+                                    </q-tooltip>
+                                </q-btn>
+                            </div>
+                        </q-td>
+                    </template>
                 </q-table>
             </div>
 
@@ -187,10 +213,10 @@
                 <q-card class="dialog-card">
                     <q-card-section class="dialog-header">
                         <div class="dialog-title">
-                            <q-icon name="person_add" color="blue-7" size="1.5rem" />
+                            <q-icon name="person_add" color="white" size="1.5rem" />
                             <h6>Agregar Nuevo Usuario</h6>
                         </div>
-                        <q-btn flat round icon="close" v-close-popup color="grey-6" />
+                        <q-btn flat round icon="close" v-close-popup color="white" />
                     </q-card-section>
 
                     <q-separator />
@@ -289,6 +315,110 @@
                 </q-card>
             </q-dialog>
 
+            <!-- Edit User Dialog -->
+            <q-dialog v-model="editDialog" class="user-dialog">
+                <q-card class="dialog-card">
+                    <q-card-section class="dialog-header">
+                        <div class="dialog-title">
+                            <q-icon name="edit" color="white" size="1.5rem" />
+                            <h6>Editar Usuario</h6>
+                        </div>
+                        <q-btn flat round icon="close" v-close-popup color="white" />
+                    </q-card-section>
+
+                    <q-separator />
+
+                    <q-card-section class="dialog-content">
+                        <div class="form-grid">
+                            <q-input
+                                outlined
+                                type="text"
+                                label="Nombres"
+                                v-model="editUser.nombres"
+                                class="form-input"
+                                color="blue-7"
+                            >
+                                <template v-slot:prepend>
+                                    <q-icon name="person" color="blue-7" />
+                                </template>
+                            </q-input>
+
+                            <q-input
+                                outlined
+                                type="text"
+                                label="Apellidos"
+                                v-model="editUser.apellidos"
+                                class="form-input"
+                                color="blue-7"
+                            >
+                                <template v-slot:prepend>
+                                    <q-icon name="person" color="blue-7" />
+                                </template>
+                            </q-input>
+
+                            <q-input
+                                outlined
+                                type="email"
+                                label="Correo Electrónico"
+                                v-model="editUser.email"
+                                class="form-input"
+                                color="blue-7"
+                            >
+                                <template v-slot:prepend>
+                                    <q-icon name="email" color="blue-7" />
+                                </template>
+                            </q-input>
+
+                            <q-select
+                                outlined
+                                label="Rol"
+                                v-model="editUser.role"
+                                :options="roles"
+                                option-label="label"
+                                option-value="value"
+                                emit-value
+                                map-options
+                                class="form-input"
+                                color="blue-7"
+                            >
+                                <template v-slot:prepend>
+                                    <q-icon name="admin_panel_settings" color="blue-7" />
+                                </template>
+                            </q-select>
+
+                            <div class="status-section">
+                                <q-toggle
+                                    v-model="editUser.estado"
+                                    color="green"
+                                    :label="editUser.estado ? 'Usuario Activo' : 'Usuario Inactivo'"
+                                    left-label
+                                    class="status-toggle"
+                                />
+                            </div>
+                        </div>
+                    </q-card-section>
+
+                    <q-separator />
+
+                    <q-card-actions class="dialog-actions">
+                        <q-btn 
+                            flat 
+                            label="Cancelar" 
+                            color="grey-6" 
+                            v-close-popup 
+                            no-caps
+                        />
+                        <q-btn 
+                            color="blue-7" 
+                            label="Actualizar Usuario" 
+                            no-caps
+                            icon="save"
+                            @click="updateUser"
+                        />
+                    </q-card-actions>
+                </q-card>
+            </q-dialog>
+
         </div>
     </div>
 </template>
@@ -297,7 +427,7 @@
 import { useRouter } from 'vue-router'
 import { ref } from 'vue'
 import { onMounted } from 'vue'
-import { getData, postData } from '../services/apiClient.js'
+import { getData, postData, putData } from '../services/apiClient.js'
 import { useAuth } from '../stores/store.js'
 import { useAuthGuard } from '../composables/useAuthGuard.js'
 
@@ -341,6 +471,13 @@ const columns = ref ([
         label: "Estado",
         field: "estado",
         sortable: "true",
+    },
+    {
+        name: "acciones",
+        align: "center",
+        label: "Acciones",
+        field: "acciones",
+        sortable: false,
     }
 ])
 const rows = ref([])
@@ -355,14 +492,26 @@ const newUser = ref({
     role: ''
 })
 
+// Variables para editar usuario
+const editUser = ref({
+    id: '',
+    nombres: '',
+    apellidos: '',
+    email: '',
+    role: '',
+    estado: true
+})
+
+const dialog = ref(false)
+const editDialog = ref(false)
+const isEditing = ref(false)
+const backdropFilter = ref(null)
+const authStore = useAuth()
+
 // Lista de filtros disponibles
 const list = [
   'blur(4px) saturate(150%)',
 ]
-
-const dialog = ref(false)
-const backdropFilter = ref(null)
-const authStore = useAuth()
 
 // Generamos lista de acciones
 const backdropFilterList = list.map(filter => ({
@@ -480,6 +629,71 @@ async function createUser() {
         }
     } catch (err) {
         console.error('Error al crear el usuario:', err);
+    }
+}
+
+function openEditDialog(user) {
+    editUser.value = {
+        id: user._id || user.id,
+        nombres: user.nombres,
+        apellidos: user.apellidos,
+        email: user.email,
+        role: user.role,
+        estado: user.estado !== undefined ? user.estado : true
+    }
+    editDialog.value = true
+}
+
+async function updateUser() {
+    try {
+        // Validar que todos los campos estén llenos
+        if (!editUser.value.nombres || !editUser.value.apellidos || !editUser.value.email || !editUser.value.role) {
+            console.error('Todos los campos son obligatorios');
+            return;
+        }
+
+        const userData = {
+            nombres: editUser.value.nombres,
+            apellidos: editUser.value.apellidos,
+            email: editUser.value.email,
+            role: editUser.value.role,
+            estado: editUser.value.estado
+        }
+
+        const response = await putData(`/user/${editUser.value.id}`, userData);
+
+        if (response) {
+            console.log('Usuario actualizado exitosamente');
+            
+            // Cerrar el diálogo
+            editDialog.value = false;
+            
+            // Actualizar la lista de usuarios
+            await getUsers();
+        }
+    } catch (err) {
+        console.error('Error al actualizar el usuario:', err);
+    }
+}
+
+async function toggleUserStatus(user) {
+    try {
+        const newStatus = !user.estado;
+        
+        const userData = {
+            estado: newStatus
+        }
+
+        const response = await putData(`/user/${user._id || user.id}`, userData);
+
+        if (response) {
+            console.log(`Usuario ${newStatus ? 'activado' : 'desactivado'} exitosamente`);
+            
+            // Actualizar la lista de usuarios
+            await getUsers();
+        }
+    } catch (err) {
+        console.error('Error al cambiar el estado del usuario:', err);
     }
 }
 
@@ -823,6 +1037,45 @@ onMounted(()=>{
     background: var(--light-gray);
     justify-content: flex-end;
     gap: 1rem;
+}
+
+/* Action Buttons Styles */
+.action-buttons {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    align-items: center;
+}
+
+.action-btn-small {
+    transition: all 0.2s ease;
+}
+
+.action-btn-small:hover {
+    transform: scale(1.1);
+}
+
+/* Status Badge Styles */
+.status-badge {
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Status Toggle Section */
+.status-section {
+    padding: 1rem;
+    background: var(--light-gray);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.status-toggle {
+    font-weight: 600;
+    font-size: 1rem;
 }
 
 /* Responsive Design */

@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test API Compras - Firebase Storage</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .section { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px; }
+        .button { background: #1976d2; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; margin: 5px; }
+        .button:hover { background: #1565c0; }
+        .result { margin-top: 10px; padding: 10px; background: #f5f5f5; border-radius: 4px; }
+        input[type="file"] { margin: 10px 0; }
+        input[type="text"], textarea { width: 100%; padding: 8px; margin: 5px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Test API Compras - Firebase Storage</h1>
+        
+        <!-- Test 1: Subir archivos -->
+        <div class="section">
+            <h3>1. Subir Archivos</h3>
+            <input type="text" id="titulo" placeholder="Título del documento" value="Test Firebase Storage">
+            <input type="file" id="archivos" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.jpg,.jpeg,.png,.gif,.webp">
+            <button class="button" onclick="subirArchivos()">Subir Archivos</button>
+            <div id="resultado-subida" class="result" style="display: none;"></div>
+        </div>
+        
+        <!-- Test 2: Obtener documentos -->
+        <div class="section">
+            <h3>2. Obtener Todos los Documentos</h3>
+            <button class="button" onclick="obtenerDocumentos()">Obtener Documentos</button>
+            <div id="resultado-documentos" class="result" style="display: none;"></div>
+        </div>
+        
+        <!-- Test 3: Obtener documento específico -->
+        <div class="section">
+            <h3>3. Obtener Documento Específico</h3>
+            <input type="text" id="documentoId" placeholder="ID del documento">
+            <button class="button" onclick="obtenerDocumento()">Obtener Documento</button>
+            <div id="resultado-documento" class="result" style="display: none;"></div>
+        </div>
+        
+        <!-- Test 4: Descargar archivo -->
+        <div class="section">
+            <h3>4. Descargar Archivo</h3>
+            <input type="text" id="docIdDescarga" placeholder="ID del documento">
+            <input type="number" id="fileIndex" placeholder="Índice del archivo (0, 1, 2...)" value="0">
+            <button class="button" onclick="descargarArchivo()">Descargar Archivo</button>
+        </div>
+        
+        <!-- Test 5: Debug estructura de datos -->
+        <div class="section">
+            <h3>5. Debug - Estructura de Datos</h3>
+            <input type="text" id="docIdDebug" placeholder="ID del documento para debug">
+            <button class="button" onclick="debugDocumento()" style="background: #9c27b0;">Debug Documento</button>
+            <button class="button" onclick="debugTodosDocumentos()" style="background: #673ab7;">Debug Todos</button>
+            <div id="resultado-debug" class="result" style="display: none;"></div>
+        </div>
+
+        <!-- Test 6: Eliminar documento -->
+        <div class="section">
+            <h3>6. Eliminar Documento</h3>
+            <input type="text" id="docIdEliminar" placeholder="ID del documento">
+            <button class="button" onclick="eliminarDocumento()" style="background: #d32f2f;">Eliminar Documento</button>
+            <div id="resultado-eliminar" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:5000/api/compras';
+        
+        // Función para mostrar resultados
+        function mostrarResultado(elementId, data, esError = false) {
+            const elemento = document.getElementById(elementId);
+            elemento.style.display = 'block';
+            elemento.style.background = esError ? '#ffebee' : '#f5f5f5';
+            elemento.style.color = esError ? '#c62828' : '#333';
+            elemento.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+        }
+        
+        // Test 1: Subir archivos
+        async function subirArchivos() {
+            const titulo = document.getElementById('titulo').value;
+            const archivos = document.getElementById('archivos').files;
+            
+            if (!titulo || archivos.length === 0) {
+                alert('Por favor, proporciona un título y selecciona al menos un archivo');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('documento', titulo);
+            
+            for (let archivo of archivos) {
+                formData.append('documentos', archivo);
+            }
+            
+            try {
+                console.log('Subiendo archivos...', { titulo, cantidadArchivos: archivos.length });
+                
+                const response = await fetch(API_BASE, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                console.log('✅ Archivos subidos:', data);
+                mostrarResultado('resultado-subida', data);
+                
+            } catch (error) {
+                console.error('❌ Error:', error);
+                mostrarResultado('resultado-subida', { error: error.message }, true);
+            }
+        }
+        
+        // Test 2: Obtener todos los documentos
+        async function obtenerDocumentos() {
+            try {
+                console.log('Obteniendo documentos...');
+                
+                const response = await fetch(API_BASE);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                console.log('✅ Documentos obtenidos:', data);
+                mostrarResultado('resultado-documentos', data);
+                
+            } catch (error) {
+                console.error('❌ Error:', error);
+                mostrarResultado('resultado-documentos', { error: error.message }, true);
+            }
+        }
+        
+        // Test 3: Obtener documento específico
+        async function obtenerDocumento() {
+            const documentoId = document.getElementById('documentoId').value;
+            
+            if (!documentoId) {
+                alert('Por favor, proporciona el ID del documento');
+                return;
+            }
+            
+            try {
+                console.log('Obteniendo documento:', documentoId);
+                
+                const response = await fetch(`${API_BASE}/${documentoId}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                console.log('✅ Documento obtenido:', data);
+                mostrarResultado('resultado-documento', data);
+                
+            } catch (error) {
+                console.error('❌ Error:', error);
+                mostrarResultado('resultado-documento', { error: error.message }, true);
+            }
+        }
+        
+        // Test 4: Descargar archivo
+        function descargarArchivo() {
+            const docId = document.getElementById('docIdDescarga').value;
+            const fileIndex = document.getElementById('fileIndex').value;
+            
+            if (!docId || fileIndex === '') {
+                alert('Por favor, proporciona el ID del documento y el índice del archivo');
+                return;
+            }
+            
+            const downloadUrl = `${API_BASE}/${docId}/file/${fileIndex}/download`;
+            console.log('🔗 Descargando archivo desde:', downloadUrl);
+            
+            // Crear link temporal para forzar descarga
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.target = '_blank';
+            link.download = ''; // Permitir que el servidor defina el nombre
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            // También abrir en nueva pestaña como respaldo
+            setTimeout(() => {
+                window.open(downloadUrl, '_blank');
+            }, 100);
+        }
+        
+        // Test 5: Eliminar documento
+        async function eliminarDocumento() {
+            const documentoId = document.getElementById('docIdEliminar').value;
+            
+            if (!documentoId) {
+                alert('Por favor, proporciona el ID del documento');
+                return;
+            }
+            
+            if (!confirm('¿Estás seguro de que quieres eliminar este documento?')) {
+                return;
+            }
+            
+            try {
+                console.log('Eliminando documento:', documentoId);
+                
+                const response = await fetch(`${API_BASE}/${documentoId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                console.log('✅ Document eliminado:', data);
+                mostrarResultado('resultado-eliminar', data);
+                
+            } catch (error) {
+                console.error('❌ Error:', error);
+                mostrarResultado('resultado-eliminar', { error: error.message }, true);
+            }
+        }
+        
+        // Test 5: Debug estructura de datos
+        async function debugDocumento() {
+            const documentoId = document.getElementById('docIdDebug').value;
+            
+            if (!documentoId) {
+                alert('Por favor, proporciona el ID del documento');
+                return;
+            }
+            
+            try {
+                console.log('🔍 Debug documento:', documentoId);
+                
+                const response = await fetch(`${API_BASE}/${documentoId}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                console.log('🔍 Estructura del documento:', data);
+                
+                // Analizar la estructura de archivos
+                if (data.compras && data.compras.documentos) {
+                    console.log('📁 Archivos encontrados:', data.compras.documentos.length);
+                    data.compras.documentos.forEach((archivo, index) => {
+                        console.log(`📄 Archivo ${index}:`, {
+                            nombre: archivo.originalName,
+                            downloadURL: archivo.downloadURL,
+                            size: archivo.size,
+                            mimetype: archivo.mimetype,
+                            firebaseRef: archivo.firebaseRef
+                        });
+                    });
+                }
+                
+                mostrarResultado('resultado-debug', data);
+                
+            } catch (error) {
+                console.error('❌ Error en debug:', error);
+                mostrarResultado('resultado-debug', { error: error.message }, true);
+            }
+        }
+        
+        async function debugTodosDocumentos() {
+            try {
+                console.log('🔍 Debug todos los documentos');
+                
+                const response = await fetch(API_BASE);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                console.log('🔍 Todos los documentos:', data);
+                
+                // Analizar cada documento
+                data.forEach((doc, docIndex) => {
+                    console.log(`📋 Documento ${docIndex} (${doc._id}):`, {
+                        titulo: doc.documento,
+                        cantidadArchivos: doc.documentos ? doc.documentos.length : 0,
+                        archivos: doc.documentos ? doc.documentos.map(arch => ({
+                            nombre: arch.originalName,
+                            tieneDownloadURL: !!arch.downloadURL,
+                            downloadURL: arch.downloadURL
+                        })) : []
+                    });
+                });
+                
+                mostrarResultado('resultado-debug', {
+                    totalDocumentos: data.length,
+                    documentos: data.map(doc => ({
+                        id: doc._id,
+                        titulo: doc.documento,
+                        archivos: doc.documentos ? doc.documentos.length : 0
+                    }))
+                });
+                
+            } catch (error) {
+                console.error('❌ Error en debug:', error);
+                mostrarResultado('resultado-debug', { error: error.message }, true);
+            }
+        }
+
+        // Log inicial
+        console.log('🧪 Test Firebase Storage para Compras iniciado');
+        console.log('📍 API Base URL:', API_BASE);
+    </script>
+</body>
+</html>

@@ -30,7 +30,6 @@
             <div class="content-header">
                 <div class="header-left">
                     <h4 class="page-title">¡Bienvenido! 👋</h4>
-                    <p class="page-subtitle">Accede a todos tus recursos y documentos desde aquí</p>
                 </div>
                 <div class="header-actions">
                     <q-btn flat round color="blue-7" icon="notifications" class="action-btn" size="md">
@@ -158,8 +157,7 @@
                                     Todos los asociados deben actualizar sus datos personales antes del 1 de diciembre de 2025.
                                 </p>
                                 <div class="news-actions">
-                                    <q-btn flat color="blue-7" label="Actualizar" size="sm" no-caps />
-                                    <q-btn flat color="grey-7" label="Info" size="sm" no-caps />
+                                   
                                 </div>
                             </div>
                         </div>
@@ -196,8 +194,7 @@
                                     La cooperativa ha implementado nuevas políticas para el trabajo remoto que entran en vigencia el próximo mes.
                                 </p>
                                 <div class="news-actions">
-                                    <q-btn flat color="blue-7" label="Leer más" size="sm" no-caps />
-                                    <q-btn flat color="grey-7" icon="share" size="sm" />
+                                   
                                 </div>
                             </q-card-section>
                         </q-card>
@@ -228,8 +225,7 @@
                                     Mejoras en el rendimiento y nuevas funcionalidades para una mejor experiencia de usuario.
                                 </p>
                                 <div class="news-actions">
-                                    <q-btn flat color="blue-7" label="Ver cambios" size="sm" no-caps />
-                                    <q-btn flat color="grey-7" icon="upgrade" size="sm" />
+                                
                                 </div>
                             </q-card-section>
                         </q-card>
@@ -264,8 +260,10 @@ function goToDocuments() {
     // Redirigir según el rol del usuario
     switch (userRole) {
         case 'administrador':
-        case 'sistemas':
             router.push('/admin')
+            break
+        case 'sistemas':
+            router.push('/sistemas')
             break
         case 'gerencia':
             router.push('/gerencia')
