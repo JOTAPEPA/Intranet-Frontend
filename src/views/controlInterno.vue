@@ -40,10 +40,7 @@
                         <p class="page-subtitle">Gestiona Documentos de Control Interno</p>
                     </div>
                     <div class="header-actions">
-                        <q-btn flat round icon="notifications" class="action-btn" size="md">
-                            <q-tooltip>Notificaciones</q-tooltip>
-                            <q-badge color="red" floating>3</q-badge>
-                        </q-btn>
+                    
                         <q-btn flat round color="blue-7" icon="person" class="action-btn" size="md">
                             <q-tooltip>Ver Perfil</q-tooltip>
                         </q-btn>
@@ -473,18 +470,8 @@
 
                                     <!-- Metadatos del documento -->
                                     <div v-if="selectedFiles.length > 0 && !isUploading && !uploadResult" class="metadata-form">
-                                        <q-input 
-                                            v-model="documentTitle" 
-                                            label="Título del documento"
-                                            outlined
-                                            dense
-                                            class="q-mb-md"
-                                            :rules="[val => !!val || 'El título es requerido']"
-                                        >
-                                            <template v-slot:prepend>
-                                                <q-icon name="title" color="blue-7" />
-                                            </template>
-                                        </q-input>
+      
+                                    
                                         <q-textarea 
                                             v-model="documentDescription" 
                                             label="Descripción (opcional)"
@@ -564,14 +551,7 @@
                                     @click="resetUpload"
                                     icon="refresh"
                                 />
-                                <q-btn 
-                                    v-if="uploadResult && uploadResult.success"
-                                    unelevated 
-                                    label="Subir otro documento" 
-                                    color="primary" 
-                                    @click="resetUpload"
-                                    icon="add"
-                                />
+
                             </q-card-actions>
                         </q-card>
                     </q-dialog>
@@ -836,7 +816,7 @@ function handleFilesSelection(files, addToExisting = false) {
         }
         
         selectedFiles.value = [...selectedFiles.value, ...newFiles]
-        showNotification('positive', `${newFiles.length} archivo(s) agregado(s)`, `Total: ${selectedFiles.value.length} archivos`)
+ 
     } else {
         selectedFiles.value = validFiles
     }
@@ -1044,12 +1024,7 @@ async function uploadFiles() {
                 filesUploaded: successfulUploads
             }
             
-            const message = successfulUploads === 1 
-                ? 'Archivo subido exitosamente como documento individual' 
-                : `${successfulUploads} archivos subidos exitosamente como documentos individuales`
-            
-            showNotification('positive', message, 'Cada archivo se ha guardado como un documento separado')
-            
+
         } else if (successfulUploads > 0) {
             // Algunos archivos fallaron
             uploadResult.value = {
@@ -1284,12 +1259,7 @@ async function downloadDocumentsSimple(documents) {
             }
         }
         
-        const message = documentData.archivos.length === 1 
-            ? 'Descarga iniciada' 
-            : `Descargando ${documentData.archivos.length} archivos`
-        
-        showNotification('positive', message, 'Los archivos se están descargando')
-        
+
     } catch (error) {
         console.error('Error al descargar documentos:', error)
         showNotification('negative', 'Error de descarga', 'No se pudieron descargar los documentos')

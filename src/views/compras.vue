@@ -1,4 +1,4 @@
-<template>
+    <template>
     <div>
         <div class="admin-container">
             <!-- Sidebar Navigation -->
@@ -41,10 +41,6 @@
                         <p class="page-subtitle">Gestiona Documentos de Compras</p>    
                     </div>
                     <div class="header-actions">
-                        <q-btn flat round icon="notifications" class="action-btn" size="md">
-                            <q-tooltip>Notificaciones</q-tooltip>
-                            <q-badge color="red" floating>3</q-badge>
-                        </q-btn>
                         <q-btn flat round color="blue-7" icon="person" class="action-btn" size="md" @click="viewProfile">
                             <q-tooltip>Ver Perfil</q-tooltip>
                         </q-btn>
@@ -153,19 +149,23 @@
                                                                 @click="removeFile(index)"
                                                             >
                                                                 <q-tooltip>Eliminar archivo</q-tooltip>
-                                                            </q-btn>
-                                                        </div>
+                                                            </q-btn>                                                        </div>
                                                         <div class="file-info">
-                                                            <p class="file-name">{{ file.name }}</p>
-                                                            <p class="file-size">{{ formatFileSize(file.size) }}</p>
-                                                            <q-chip 
-                                                                :color="getFileTypeColor(getFileExtension(file.name))"
-                                                                :text-color="getFileTypeTextColor(getFileExtension(file.name))"
-                                                                size="sm"
-                                                                dense
-                                                            >
-                                                                {{ getFileExtension(file.name).toUpperCase() }}
-                                                            </q-chip>
+                                                            <div class="file-name-row">
+                                                                <div class="file-name-display">{{ file.name }}</div>
+                                                            </div>
+                                                            <div class="file-metadata-row">
+                                                                <div class="file-size-badge">{{ formatFileSize(file.size) }}</div>
+                                                                <q-chip 
+                                                                    :color="getFileTypeColor(getFileExtension(file.name))"
+                                                                    :text-color="getFileTypeTextColor(getFileExtension(file.name))"
+                                                                    size="sm"
+                                                                    dense
+                                                                    class="file-type-chip"
+                                                                >
+                                                                    {{ getFileExtension(file.name).toUpperCase() }}
+                                                                </q-chip>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -185,18 +185,6 @@
 
                                     <!-- Metadatos del documento -->
                                     <div v-if="selectedFiles.length > 0 && !isUploading && !uploadResult" class="metadata-form">
-                                        <q-input 
-                                            v-model="documentTitle" 
-                                            label="Título del documento"
-                                            outlined
-                                            dense
-                                            class="q-mb-md"
-                                            :rules="[val => !!val || 'El título es requerido']"
-                                        >
-                                            <template v-slot:prepend>
-                                                <q-icon name="title" color="blue-7" />
-                                            </template>
-                                        </q-input>
                                         <q-textarea 
                                             v-model="documentDescription" 
                                             label="Descripción (opcional)"
@@ -276,14 +264,7 @@
                                     @click="resetUpload"
                                     icon="refresh"
                                 />
-                                <q-btn 
-                                    v-if="uploadResult && uploadResult.success"
-                                    unelevated 
-                                    label="Subir otro documento" 
-                                    color="primary" 
-                                    @click="resetUpload"
-                                    icon="add"
-                                />
+                         
                             </q-card-actions>
                         </q-card>
                     </q-dialog>
@@ -1046,11 +1027,7 @@ async function uploadFiles() {
                 filesUploaded: successfulUploads
             }
             
-            const message = successfulUploads === 1 
-                ? 'Archivo subido exitosamente como documento individual' 
-                : `${successfulUploads} archivos subidos exitosamente como documentos individuales`
-            
-            showNotification('positive', message, 'Cada archivo se ha guardado como un documento separado')
+
             
         } else if (successfulUploads > 0) {
             // Algunos archivos fallaron
@@ -1293,7 +1270,6 @@ function handleFilesSelection(files, addToExisting = false) {
         }
         
         selectedFiles.value = [...selectedFiles.value, ...newFiles]
-        showNotification('positive', `${newFiles.length} archivo(s) agregado(s)`, `Total: ${selectedFiles.value.length} archivos`)
     } else {
         selectedFiles.value = validFiles
     }
@@ -2446,6 +2422,7 @@ onMounted(() => {
 .file-item-preview {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 1rem;
     padding: 0.75rem;
     background: var(--light-gray);
@@ -2460,7 +2437,7 @@ onMounted(() => {
 }
 
 .file-info {
-    display: flex;
+    display: grid;
     align-items: center;
     gap: 1rem;
     padding: 1rem;
@@ -3140,6 +3117,55 @@ onMounted(() => {
     .result-title {
         font-size: 1.2rem;
     }
+}
+
+/* Estilos para las tarjetas de archivo con tamaño y tipo en las esquinas */
+.file-name-row {
+    display: flex;
+    justify-content: flex-start;
+    align-items: flex-start;
+    margin-bottom: 0.75rem;
+}
+
+.file-name-display {
+    font-weight: 600;
+    color: #333;
+    font-size: 0.9rem;
+    line-height: 1.2;
+    word-break: break-word;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    flex: 1;
+    min-width: 0;
+    text-align: center;
+}
+
+.file-metadata-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: auto;
+}
+
+.file-size-badge {
+    font-size: 0.75rem;
+    color: #666;
+    background: #f5f5f5;
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    font-weight: 500;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.file-type-chip {
+    font-weight: 600;
+    font-size: 0.75rem;
+    flex-shrink: 0;
 }
 
 </style>

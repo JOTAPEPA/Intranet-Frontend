@@ -599,14 +599,15 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { getData, deleteData } from '../services/apiClient.js'
 import { useAuth } from '../stores/store.js'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import axios from 'axios'
 import DepartmentChip from '../components/DepartmentChip.vue'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuth()
 
 // Función para mostrar notificaciones (temporal)
@@ -1482,7 +1483,14 @@ function openFileInNewTab(file) {
 // Cargar documentos al montar el componente
 onMounted(() => {
     getDocuments();
+    if (route?.query?.upload === '1' || route?.query?.upload === 'true') {
+        openDialog()
+    }
 });
+
+watch(() => route.query?.upload, (val) => {
+    if (val === '1' || val === 'true') openDialog()
+})
 </script>
 
 <style scoped>

@@ -581,14 +581,15 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useAuth } from '../stores/store.js'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { getData, postData, deleteData } from '../services/apiClient.js'
 import axios from 'axios'
 import DepartmentChip from '../components/DepartmentChip.vue'
 
 const router = useRouter()
+const route = useRoute()
 
 // Función para mostrar notificaciones (temporal)
 function showNotification(type, message, caption = '') {
@@ -633,6 +634,16 @@ const selectedDocumentForView = ref(null)
 async function loadDocuments() {
     await getDocuments();
 }
+
+onMounted(() => {
+    if (route?.query?.upload === '1' || route?.query?.upload === 'true') {
+        openDialog()
+    }
+})
+
+watch(() => route.query?.upload, (val) => {
+    if (val === '1' || val === 'true') openDialog()
+})
 
 function viewProfile() {
     router.push('/profile') 

@@ -17,8 +17,7 @@
                 </div>
 
                 <div class="sidebar-menu">
-                    <q-btn flat icon="dashboard" label="Inicio" align="left" class="menu-item active" no-caps />
-                    <q-btn flat icon="people" label="Usuarios" align="left" class="menu-item" no-caps />
+                    <q-btn flat icon="home" label="Inicio" align="left" class="menu-item active" no-caps @click="goHome"/>
                     <q-btn flat icon="settings" label="Configuración" align="left" class="menu-item" no-caps />
                 </div>
             </div>
@@ -44,10 +43,7 @@
                         <p class="page-subtitle">{{ getDepartmentSubtitle() }}</p>
                     </div>
                     <div class="header-actions">
-                        <q-btn flat round icon="notifications" class="action-btn" size="md">
-                            <q-tooltip>Notificaciones</q-tooltip>
-                            <q-badge color="red" floating>3</q-badge>
-                        </q-btn>
+                  
                         <q-btn flat round color="blue-7" icon="person" class="action-btn" size="md">
                             <q-tooltip>Ver Perfil</q-tooltip>
                         </q-btn>
@@ -60,7 +56,7 @@
 
                 <!-- Action Buttons -->
                 <div class="action-buttons">
-                    <q-btn-dropdown
+                    <q-btn
                         v-for="item in backdropFilterList"
                         :key="item.label"
                         unelevated
@@ -71,7 +67,7 @@
                         class="upload-btn"
                     >
                         <q-tooltip>Subir documentos de gerencia</q-tooltip>
-                    </q-btn-dropdown>
+                    </q-btn>
                 </div>
 
                 <!-- Tabs para Departamentos -->
@@ -365,8 +361,12 @@
                                                             </q-btn>
                                                         </div>
                                                         <div class="file-info">
-                                                            <p class="file-name">{{ file.name }}</p>
-                                                            <p class="file-size">{{ formatFileSize(file.size) }}</p>
+                                                            <div>
+                                                                  <p class="file-name">{{ file.name }}</p>
+                                                            </div>
+                                                          
+                                                            <div style="display: flex; justify-content: space-around; align-items: center; gap: 0.5rem;">
+                                                                  <p class="file-size">{{ formatFileSize(file.size) }}</p>
                                                             <q-chip 
                                                                 :color="getFileTypeColor(getFileExtension(file.name))"
                                                                 :text-color="getFileTypeTextColor(getFileExtension(file.name))"
@@ -375,6 +375,8 @@
                                                             >
                                                                 {{ getFileExtension(file.name).toUpperCase() }}
                                                             </q-chip>
+                                                            </div>
+                                                          
                                                         </div>
                                                     </div>
                                                 </div>
@@ -394,18 +396,7 @@
 
                                     <!-- Metadatos del documento -->
                                     <div v-if="selectedFiles.length > 0 && !isUploading && !uploadResult" class="metadata-form">
-                                        <q-input 
-                                            v-model="documentTitle" 
-                                            label="Título del documento"
-                                            outlined
-                                            dense
-                                            class="q-mb-md"
-                                            :rules="[val => !!val || 'El título es requerido']"
-                                        >
-                                            <template v-slot:prepend>
-                                                <q-icon name="title" color="blue-7" />
-                                            </template>
-                                        </q-input>
+                                    
                                         <q-textarea 
                                             v-model="documentDescription" 
                                             label="Descripción (opcional)"
@@ -485,14 +476,7 @@
                                     @click="resetUpload"
                                     icon="refresh"
                                 />
-                                <q-btn 
-                                    v-if="uploadResult && uploadResult.success"
-                                    unelevated 
-                                    label="Subir otro documento" 
-                                    color="primary" 
-                                    @click="resetUpload"
-                                    icon="add"
-                                />
+                        
                             </q-card-actions>
                         </q-card>
                     </q-dialog>
@@ -735,6 +719,11 @@ const canViewAllDepartments = computed(() => {
     const userRole = authStore.getUserRole();
     return ['gerencia', 'administrador', 'sistemas'].includes(userRole);
 });
+
+async function goHome () {
+    await router.push('/home')
+}
+
 
 /**
  * Computed para obtener los departamentos visibles según el rol
@@ -1131,7 +1120,6 @@ async function deleteDocument(document) {
         
         console.log('✅ Documento eliminado:', response.data);
         
-        showNotification('positive', 'Documento eliminado', 'El documento y sus archivos han sido eliminados correctamente');
         
         // Recargar la lista de documentos
         await getDocuments();
@@ -1226,7 +1214,7 @@ const departments = ref([
  * Lista de botones para subir documentos
  */
 const list = [
-  'Subir Documento de Gerencia',
+  'Subir Documento',
 ]
 
 const backdropFilterList = list.map(filter => ({
@@ -1501,11 +1489,6 @@ async function uploadFiles() {
                 filesUploaded: uploadedCount
             }
             
-            const message = uploadedCount === 1 
-                ? 'Archivo subido exitosamente' 
-                : `${uploadedCount} archivos subidos exitosamente`
-            
-            showNotification('positive', message, 'Los documentos han sido guardados en el sistema')
         } else if (uploadedCount > 0) {
             uploadResult.value = {
                 success: true,
@@ -2128,7 +2111,7 @@ onMounted(() => {
     border-bottom: 1px solid var(--border-color);
     gap: 1rem;
     padding: 1.5rem;
-    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+    margin-left: -30px;
 }
 
 .table-title-container {
@@ -2553,7 +2536,7 @@ onMounted(() => {
 }
 
 .file-info {
-    display: flex;
+    display: grid;
     align-items: center;
     gap: 1rem;
     padding: 1rem;

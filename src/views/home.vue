@@ -29,13 +29,10 @@
             <!-- Header -->
             <div class="content-header">
                 <div class="header-left">
-                    <h4 class="page-title">¡Bienvenido! 👋</h4>
+                    <h4 class="page-title">¡Bienvenido! </h4>
                 </div>
                 <div class="header-actions">
-                    <q-btn flat round color="blue-7" icon="notifications" class="action-btn" size="md">
-                        <q-tooltip>Notificaciones</q-tooltip>
-                        <q-badge color="red" floating>2</q-badge>
-                    </q-btn>
+
                     <q-btn flat round color="blue-7" icon="person" @click="viewProfile" class="action-btn" size="md">
                         <q-tooltip>Ver Perfil</q-tooltip>
                     </q-btn>
@@ -87,17 +84,7 @@
                                 </q-card>
 
                                 <q-card class="action-card">
-                                    <q-card-section>
-                                        <div class="action-content">
-                                            <div class="action-icon blue-icon">
-                                                <q-icon name="search" size="2rem" color="blue-7" />
-                                            </div>
-                                            <div class="action-info">
-                                                <h6>Buscar</h6>
-                                                <p>Encuentra lo que necesitas</p>
-                                            </div>
-                                        </div>
-                                    </q-card-section>
+                                  
                                 </q-card>
                             </div>
 
@@ -106,28 +93,18 @@
                                     <q-card-section>
                                         <div class="action-content">
                                             <div class="action-icon light-blue-icon">
-                                                <q-icon name="cloud_upload" size="2rem" color="light-blue-7" />
+                                                <q-icon name="person" size="2rem" color="light-blue-7" />
                                             </div>
                                             <div class="action-info">
-                                                <h6>Subir Archivo</h6>
-                                                <p>Sube nuevos documentos</p>
+                                                <h6>Ver Perfil</h6>
+                                                <p>Accede a tu perfil</p>
                                             </div>
                                         </div>
                                     </q-card-section>
                                 </q-card>
 
                                 <q-card class="action-card">
-                                    <q-card-section>
-                                        <div class="action-content">
-                                            <div class="action-icon light-blue-icon">
-                                                <q-icon name="settings" size="2rem" color="light-blue-7" />
-                                            </div>
-                                            <div class="action-info">
-                                                <h6>Configuración</h6>
-                                                <p>Personaliza tu experiencia</p>
-                                            </div>
-                                        </div>
-                                    </q-card-section>
+                                   
                                 </q-card>
                             </div>
                         </div>

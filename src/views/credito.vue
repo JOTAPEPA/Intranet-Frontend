@@ -40,10 +40,7 @@
                         <p class="page-subtitle">Gestiona Documentos de Crédito</p>
                     </div>
                     <div class="header-actions">
-                        <q-btn flat round icon="notifications" class="action-btn" size="md">
-                            <q-tooltip>Notificaciones</q-tooltip>
-                            <q-badge color="red" floating>3</q-badge>
-                        </q-btn>
+                       
                         <q-btn flat round color="blue-7" icon="person" class="action-btn" size="md">
                             <q-tooltip>Ver Perfil</q-tooltip>
                         </q-btn>
@@ -185,6 +182,24 @@
                                                 </span>
                                                 <span v-else class="no-files-text">Sin archivos</span>
                                             </div>
+                                        </div>
+                                    </div>
+                                    <div v-else-if="col.name === 'tipoArchivo'" class="file-type-cell">
+                                        <div class="file-types-container">
+                                            <q-chip
+                                                v-for="(fileType, index) in props.row.tiposArchivos || []"
+                                                :key="index"
+                                                :color="getFileTypeColor(fileType)"
+                                                :text-color="getFileTypeTextColor(fileType)"
+                                                :icon="getFileTypeIcon(fileType)"
+                                                size="sm"
+                                                class="file-type-chip"
+                                            >
+                                                {{ getFileExtension(fileType).toUpperCase() }}
+                                            </q-chip>
+                                            <span v-if="!props.row.tiposArchivos || props.row.tiposArchivos.length === 0" class="no-files-text">
+                                                Sin archivos
+                                            </span>
                                         </div>
                                     </div>
                                     <div v-else-if="col.name === 'cantidadArchivos'" class="files-count-cell">
@@ -359,18 +374,7 @@
 
                                     <!-- Metadatos del documento -->
                                     <div v-if="selectedFiles.length > 0 && !isUploading && !uploadResult" class="metadata-form">
-                                        <q-input 
-                                            v-model="documentTitle" 
-                                            label="Título del documento"
-                                            outlined
-                                            dense
-                                            class="q-mb-md"
-                                            :rules="[val => !!val || 'El título es requerido']"
-                                        >
-                                            <template v-slot:prepend>
-                                                <q-icon name="title" color="blue-7" />
-                                            </template>
-                                        </q-input>
+                                
                                         <q-textarea 
                                             v-model="documentDescription" 
                                             label="Descripción (opcional)"
@@ -439,13 +443,7 @@
                                     :disabled="!documentTitle"
                                     icon="cloud_upload"
                                 />
-                                <q-btn 
-                                    v-if="uploadResult"
-                                    unelevated 
-                                    label="Subir Otro" 
-                                    color="primary" 
-                                    @click="resetUpload"
-                                />
+                               
                             </q-card-actions>
                         </q-card>
                     </q-dialog>
@@ -599,6 +597,17 @@ const columns = ref([
         align: "left",
         label: "Título del Documento",
         field: "documento",
+        sortable: true,
+    },
+    {
+        name: "tipoArchivo",
+        align: "center",
+        label: "Tipo de Archivo",
+        field: row => {
+            if (!row.documentos || row.documentos.length === 0) return 'Sin archivos';
+            const tipos = [...new Set(row.documentos.map(doc => (doc.originalName || doc.fileName).split('.').pop()?.toLowerCase()))];
+            return tipos.filter(tipo => tipo && tipo !== 'desconocido').join(', ') || 'Desconocido';
+        },
         sortable: true,
     },
     {
@@ -793,7 +802,7 @@ function handleFilesSelection(files, addToExisting = false) {
         }
         
         selectedFiles.value = [...selectedFiles.value, ...newFiles]
-        showNotification('positive', `${newFiles.length} archivo(s) agregado(s)`, `Total: ${selectedFiles.value.length} archivos`)
+  
     } else {
         selectedFiles.value = validFiles
     }
@@ -936,12 +945,7 @@ async function uploadFiles() {
                 filesUploaded: successfulUploads
             }
             
-            const message = successfulUploads === 1 
-                ? 'Archivo subido exitosamente como documento individual' 
-                : `${successfulUploads} archivos subidos exitosamente como documentos individuales`
-            
-            showNotification('positive', message, 'Cada archivo se ha guardado como un documento separado')
-            
+ 
         } else if (successfulUploads > 0) {
             // Algunos archivos fallaron
             uploadResult.value = {
@@ -1120,6 +1124,7 @@ async function searchDocuments() {
                 ...doc,
                 tieneArchivos: doc.documentos && doc.documentos.length > 0,
                 cantidadArchivos: doc.documentos ? doc.documentos.length : 0,
+                tiposArchivos: doc.documentos ? doc.documentos.map(archivo => archivo.originalName || archivo.fileName) : [],
                 archivos: doc.documentos ? doc.documentos.map(archivo => ({
                     id: archivo._id,
                     nombre: archivo.originalName || archivo.fileName,
@@ -1161,7 +1166,6 @@ async function downloadSingleFile(file) {
             document.body.appendChild(link)
             link.click()
             document.body.removeChild(link)
-            showNotification('positive', 'Descarga iniciada', `Descargando: ${file.nombre}`)
         } else {
             showNotification('negative', 'Error en descarga', 'URL de descarga no disponible')
         }
@@ -1235,9 +1239,9 @@ function getFileColor(format) {
  * Obtiene la extensión del archivo
  */
 function getFileExtension(fileName) {
-    if (!fileName) return 'FILE'
-    const extension = fileName.split('.').pop()?.toUpperCase()
-    return extension || 'FILE'
+    if (!fileName) return ''
+    const extension = fileName.split('.').pop()?.toLowerCase()
+    return extension || ''
 }
 
 /**
@@ -1324,7 +1328,7 @@ async function downloadDocumentsSimple(documentData) {
                 }
             }
             
-            showNotification('positive', 'Descarga iniciada', `Se procesaron ${documentData.archivos.length} archivo(s)`)
+ 
         } else {
             showNotification('negative', 'Sin archivos', 'No se encontraron archivos para descargar')
         }
@@ -1349,7 +1353,7 @@ async function deleteDocument(document) {
         });
         
         if (response.ok) {
-            showNotification('positive', 'Documento eliminado', 'El documento y sus archivos han sido eliminados exitosamente');
+ 
             await loadDocuments();
         } else {
             throw new Error('Error en la respuesta del servidor');
@@ -1376,6 +1380,7 @@ async function getDocuments() {
                     ...doc,
                     tieneArchivos: doc.documentos && doc.documentos.length > 0,
                     cantidadArchivos: doc.documentos ? doc.documentos.length : 0,
+                    tiposArchivos: doc.documentos ? doc.documentos.map(archivo => archivo.originalName || archivo.fileName) : [],
                     archivos: doc.documentos ? doc.documentos.map(archivo => {
                         console.log('📁 Archivo:', archivo); // Debug
                         return {
