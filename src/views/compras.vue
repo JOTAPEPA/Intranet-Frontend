@@ -936,13 +936,13 @@
 import { ref, onMounted } from 'vue'
 import { useAuth } from '../stores/store.js'
 import { useRouter } from 'vue-router'
-import { getData, postData, deleteData } from '../services/apiClient.js'
+import { getData, postData, deleteData, putData } from '../services/apiClient.js'
 import axios from 'axios'
 import DepartmentChip from '../components/DepartmentChip.vue'
 
 const router = useRouter()
 
-// ⭐ Configuración de la API
+// ⭐ Configuración de la API - Solo para referencia, usar apiClient
 const API_BASE_URL = 'http://localhost:5000/api/compras'
 
 // Función para mostrar notificaciones (temporal)
@@ -1743,33 +1743,47 @@ async function getDocuments() {
         console.log('📥 Cargando documentos de compras...');
         
         const response = await getData('/compras');
+        console.log('📦 Respuesta del servidor:', response);
         
-        if (response && Array.isArray(response)) {
-            // Procesar los datos para añadir propiedades calculadas
-            rows.value = response.map(doc => ({
-                ...doc,
-                tieneArchivos: doc.documentos && doc.documentos.length > 0,
-                cantidadArchivos: doc.documentos ? doc.documentos.length : 0,
-                archivos: doc.documentos ? doc.documentos.map(archivo => ({
-                    id: archivo._id,
-                    nombre: archivo.originalName,
-                    url: archivo.downloadURL, // Firebase Storage usa downloadURL
-                    tamaño: formatFileSize(archivo.size || 0),
-                    formato: getFileExtension(archivo.originalName),
-                    fechaSubida: new Date(archivo.uploadDate).toLocaleDateString('es-ES'),
-                    firebaseRef: archivo.firebaseRef,
-                    mimetype: archivo.mimetype
-                })) : []
-            }));
-            
-            // Calcular estadísticas
-            calculateStats();
-            
-            console.log('✅ Documentos cargados:', rows.value.length);
+        // El backend puede devolver { success: true, data: [...] } o directamente un array
+        let documents = [];
+        
+        if (response && response.success && Array.isArray(response.data)) {
+            // Estructura: { success: true, data: [...] }
+            documents = response.data;
+            console.log('✅ Datos extraídos de response.data');
+        } else if (Array.isArray(response)) {
+            // Estructura directa: [...]
+            documents = response;
+            console.log('✅ Datos extraídos directamente del response');
         } else {
-            console.log('⚠️ La respuesta no contiene los datos esperados');
+            console.warn('⚠️ La respuesta no contiene los datos esperados:', response);
             rows.value = [];
+            return;
         }
+        
+        // Procesar los datos para añadir propiedades calculadas
+        rows.value = documents.map(doc => ({
+            ...doc,
+            tieneArchivos: doc.documentos && doc.documentos.length > 0,
+            cantidadArchivos: doc.documentos ? doc.documentos.length : 0,
+            archivos: doc.documentos ? doc.documentos.map(archivo => ({
+                id: archivo._id,
+                nombre: archivo.originalName,
+                url: archivo.downloadURL, // Firebase Storage usa downloadURL
+                tamaño: formatFileSize(archivo.size || 0),
+                formato: getFileExtension(archivo.originalName),
+                fechaSubida: new Date(archivo.uploadDate).toLocaleDateString('es-ES'),
+                firebaseRef: archivo.firebaseRef,
+                mimetype: archivo.mimetype
+            })) : []
+        }));
+        
+        // Calcular estadísticas
+        calculateStats();
+        
+        console.log('✅ Documentos procesados:', rows.value.length);
+        
     } catch (err) {
         console.error('❌ Error al obtener los documentos:', err);
         showNotification('negative', 'Error al cargar documentos', 'No se pudieron obtener los documentos');
@@ -2103,13 +2117,13 @@ onMounted(async () => {
 async function initializeFolderStructure() {
     try {
         console.log('📡 Cargando estructura de carpetas desde backend...')
-        const response = await axios.get(`${API_BASE_URL}/folders`)
+        const response = await getData('/compras/folders')
         
-        if (response.data.success) {
-            folderStructure.value = response.data.data
+        if (response.success) {
+            folderStructure.value = response.data
             console.log('✅ Estructura de carpetas cargada:', folderStructure.value)
         } else {
-            console.warn('⚠️ Error al cargar estructura:', response.data.message)
+            console.warn('⚠️ Error al cargar estructura:', response.message)
             folderStructure.value = {}
         }
     } catch (error) {
@@ -2217,21 +2231,21 @@ async function createFolder(name, parentPath = null) {
     try {
         console.log('📤 Creando carpeta:', { name: trimmedName, parentPath: currentPath })
         
-        const response = await axios.post(`${API_BASE_URL}/folders`, {
+        const response = await postData('/compras/folders', {
             name: trimmedName,
             parentPath: currentPath
         })
         
-        if (response.data.success) {
+        if (response.success) {
             showNotification('positive', 'Carpeta creada', `Carpeta "${trimmedName}" creada exitosamente`)
-            console.log('✅ Carpeta creada:', response.data.data)
+            console.log('✅ Carpeta creada:', response.data)
             
             // Recargar estructura desde el backend
             await initializeFolderStructure()
             
             return true
         } else {
-            showNotification('negative', 'Error', response.data.message)
+            showNotification('negative', 'Error', response.message)
             return false
         }
     } catch (error) {
@@ -2275,9 +2289,9 @@ async function deleteFolder(folderPath) {
         console.log('📤 Eliminando carpeta:', folderPath)
         
         const encodedPath = encodeURIComponent(folderPath)
-        const response = await axios.delete(`${API_BASE_URL}/folders/${encodedPath}`)
+        const response = await deleteData(`/compras/folders/${encodedPath}`)
         
-        if (response.data.success) {
+        if (response.success) {
             showNotification('positive', 'Carpeta eliminada', `Carpeta "${folder.name}" eliminada exitosamente`)
             console.log('✅ Carpeta eliminada')
             
@@ -2291,7 +2305,7 @@ async function deleteFolder(folderPath) {
             
             return true
         } else {
-            showNotification('negative', 'Error', response.data.message)
+            showNotification('negative', 'Error', response.message)
             return false
         }
     } catch (error) {
@@ -2358,13 +2372,13 @@ async function moveDocumentToFolder(documentId, targetFolderPath) {
     try {
         console.log('📤 Moviendo documento:', { documentId, targetFolderPath })
         
-        const response = await axios.put(`${API_BASE_URL}/${documentId}/move`, {
+        const response = await putData(`/compras/${documentId}/move`, {
             targetFolderPath: targetFolderPath
         })
         
-        if (response.data.success) {
+        if (response.success) {
             showNotification('positive', 'Documento movido', 'Documento movido exitosamente')
-            console.log('✅ Documento movido:', response.data.data)
+            console.log('✅ Documento movido:', response.data)
             
             // Recargar documentos y estructura
             await loadDocuments()
@@ -2372,7 +2386,7 @@ async function moveDocumentToFolder(documentId, targetFolderPath) {
             
             return true
         } else {
-            showNotification('negative', 'Error', response.data.message)
+            showNotification('negative', 'Error', response.message)
             return false
         }
     } catch (error) {

@@ -828,6 +828,9 @@ import DepartmentChip from '../components/DepartmentChip.vue'
 
 const router = useRouter()
 
+// ⭐ URL base del API para control interno
+const API_BASE_URL = 'http://localhost:5000/api/control-interno'
+
 // Función para mostrar notificaciones (temporal)
 function showNotification(type, message, caption = '') {
     const fullMessage = caption ? `${message}\n${caption}` : message
@@ -1296,14 +1299,18 @@ async function uploadFiles() {
                 formData.append('documento', individualTitle)
                 formData.append('documentos', file)
                 
-                console.log(`📄 Subiendo archivo ${index + 1}/${totalFiles}:`, file.name)
+                // ⭐ IMPORTANTE: Agregar folderPath de la carpeta actual o seleccionada
+                const targetFolder = selectedUploadFolder.value || getCurrentPathString()
+                formData.append('folderPath', targetFolder)
+                
+                console.log(`📄 Subiendo archivo ${index + 1}/${totalFiles}:`, file.name, 'a carpeta:', targetFolder)
                 
                 // Subir el archivo individual
                 const response = await axios.post(
-                    '/control-interno',
+                    API_BASE_URL,
                     formData,
                     {
-                        baseURL: 'http://localhost:5000/api',
+                        baseURL: undefined,
                         headers: {
                             'Content-Type': 'multipart/form-data',
                         }
@@ -1340,6 +1347,10 @@ async function uploadFiles() {
                 filesUploaded: successfulUploads
             }
             
+            // ⭐ Recargar estructura de carpetas desde el backend
+            // El backend ya asignó los documentos a la carpeta correcta
+            await initializeFolderStructure()
+            console.log(`✅ ${successfulUploads} documento(s) subido(s) exitosamente`)
 
         } else if (successfulUploads > 0) {
             // Algunos archivos fallaron
@@ -1602,14 +1613,23 @@ async function deleteDocument(doc) {
     try {
         loading.value = true
         
-        // Usar el endpoint correcto: DELETE /api/control-interno/:id
-        const response = await deleteData(`/control-interno/${doc._id}`)
+        // Usar el endpoint correcto: DELETE /api/controlinterno/:id
+        const response = await axios.delete(`${API_BASE_URL}/${doc._id}`)
         
-        if (response && (response.success !== false)) {
+        if (response.data && (response.data.success !== false)) {
             showNotification('positive', 'Documento eliminado', 'El documento y todos sus archivos han sido eliminados correctamente')
-            await getDocuments() // Recargar la lista
+            
+            // Recargar estructura de carpetas y documentos
+            await initializeFolderStructure()
+            await getDocuments()
+            
+            // Cerrar diálogo de vista si el documento eliminado es el que se está viendo
+            if (viewDocumentDialog.value && selectedDocumentForView.value?._id === doc._id) {
+                viewDocumentDialog.value = false
+                selectedDocumentForView.value = null
+            }
         } else {
-            showNotification('negative', 'Error al eliminar', response.message || 'No se pudo eliminar el documento')
+            showNotification('negative', 'Error al eliminar', response.data.message || 'No se pudo eliminar el documento')
         }
     } catch (error) {
         console.error('Error al eliminar documento:', error)
@@ -1813,32 +1833,29 @@ function viewDocument(documentData) {
 // ===== FUNCIONES DEL ADMINISTRADOR DE CARPETAS =====
 
 /**
- * Inicializar estructura de carpetas
+ * Inicializar estructura de carpetas desde el backend
  */
-function initializeFolderStructure() {
-    const saved = localStorage.getItem('control-interno-folder-structure')
-    if (saved) {
-        try {
-            folderStructure.value = JSON.parse(saved)
-        } catch (error) {
-            console.error('Error parsing folder structure:', error)
+async function initializeFolderStructure() {
+    try {
+        console.log('📡 Cargando estructura de carpetas desde backend...')
+        const response = await axios.get(`${API_BASE_URL}/folders`)
+        
+        if (response.data.success) {
+            folderStructure.value = response.data.data
+            console.log('✅ Estructura de carpetas cargada:', folderStructure.value)
+        } else {
+            console.warn('⚠️ Error al cargar estructura:', response.data.message)
             folderStructure.value = {}
         }
-    } else {
+    } catch (error) {
+        console.error('❌ Error al cargar estructura de carpetas:', error)
+        showNotification('negative', 'Error al cargar carpetas', 'No se pudo conectar con el servidor')
         folderStructure.value = {}
     }
 }
 
-/**
- * Guardar estructura de carpetas en localStorage
- */
-function saveFolderStructure() {
-    try {
-        localStorage.setItem('control-interno-folder-structure', JSON.stringify(folderStructure.value))
-    } catch (error) {
-        console.error('Error saving folder structure:', error)
-    }
-}
+// ⭐ Las funciones createDefaultStructure y saveFolderStructure ya no son necesarias
+// El backend maneja la persistencia de datos
 
 /**
  * Obtener carpeta actual
@@ -1912,8 +1929,7 @@ function getCurrentPath() {
  * Obtener ruta actual como string para mostrar
  */
 function getCurrentPathString() {
-    if (currentFolderPath.value.length === 0) return '/'
-    return '/' + currentFolderPath.value.join('/')
+    return currentFolderPath.value.length === 0 ? '/' : '/' + currentFolderPath.value.join('/') + '/'
 }
 
 /**
@@ -1964,111 +1980,118 @@ function getBreadcrumbTrail() {
 }
 
 /**
- * Crear nueva carpeta
+ * Crear nueva carpeta usando el backend
  */
-function createFolder(name, parentPath = null) {
+async function createFolder(name, parentPath = null) {
     if (!name || name.trim() === '') {
-        showNotification('negative', 'Error', 'El nombre de la carpeta es requerido')
+        showNotification('negative', 'Nombre inválido', 'El nombre de la carpeta no puede estar vacío')
         return false
     }
     
-    const folderName = name.trim()
-    const targetPath = parentPath || getCurrentPath()
+    const trimmedName = name.trim()
+    const currentPath = parentPath || getCurrentPathString()
     
-    // Asegurar que la estructura de carpetas existe
-    if (!folderStructure.value['/']) {
-        folderStructure.value['/'] = { children: {} }
-    }
-    
-    // Navegar a la carpeta padre
-    let targetFolder = folderStructure.value['/']
-    
-    if (targetPath !== '/') {
-        const pathParts = targetPath.replace(/^\/+|\/+$/g, '').split('/')
-        for (const part of pathParts) {
-            if (part && targetFolder.children && targetFolder.children[part]) {
-                targetFolder = targetFolder.children[part]
-            } else {
-                showNotification('negative', 'Error', 'La carpeta padre no existe')
-                return false
-            }
+    try {
+        console.log('📤 Creando carpeta:', { name: trimmedName, parentPath: currentPath })
+        
+        const response = await axios.post(`${API_BASE_URL}/folders`, {
+            name: trimmedName,
+            parentPath: currentPath
+        })
+        
+        if (response.data.success) {
+            showNotification('positive', 'Carpeta creada', `Carpeta "${trimmedName}" creada exitosamente`)
+            console.log('✅ Carpeta creada:', response.data.data)
+            
+            // Recargar estructura desde el backend
+            await initializeFolderStructure()
+            
+            return true
+        } else {
+            showNotification('negative', 'Error', response.data.message)
+            return false
         }
-    }
-    
-    // Verificar si la carpeta ya existe
-    if (!targetFolder.children) {
-        targetFolder.children = {}
-    }
-    
-    if (targetFolder.children[folderName]) {
-        showNotification('negative', 'Error', 'Ya existe una carpeta con ese nombre')
+    } catch (error) {
+        console.error('❌ Error al crear carpeta:', error)
+        const errorMessage = error.response?.data?.message || 'No se pudo conectar con el servidor'
+        showNotification('negative', 'Error al crear carpeta', errorMessage)
         return false
     }
-    
-    // Crear la carpeta
-    targetFolder.children[folderName] = {
-        children: {}
-    }
-    
-    saveFolderStructure()
-    showNotification('positive', 'Carpeta creada', `La carpeta "${folderName}" ha sido creada exitosamente`)
-    return true
 }
 
 /**
  * Confirmar creación de carpeta desde modal
  */
-function confirmCreateFolder() {
+async function confirmCreateFolder() {
     if (!newFolderName.value || newFolderName.value.trim() === '') {
         showNotification('negative', 'Error', 'Por favor ingresa un nombre para la carpeta')
         return
     }
     
-    if (createFolder(newFolderName.value)) {
+    const success = await createFolder(newFolderName.value)
+    if (success) {
         showCreateFolderDialog.value = false
         newFolderName.value = ''
     }
 }
 
 /**
- * Eliminar carpeta
+ * Eliminar carpeta usando el backend (solo si está vacía)
  */
-function deleteFolder(folderPath) {
+async function deleteFolder(folderPath) {
+    const folder = folderStructure.value[folderPath]
+    
+    if (!folder) {
+        showNotification('negative', 'Error', 'Carpeta no encontrada')
+        return false
+    }
+    
     if (folderPath === '/') {
         showNotification('negative', 'Error', 'No se puede eliminar la carpeta raíz')
-        return
+        return false
     }
     
-    if (!confirm('¿Estás seguro de que deseas eliminar esta carpeta? Esta acción no se puede deshacer.')) {
-        return
+    // Verificar que la carpeta esté vacía
+    const hasChildren = Object.keys(folder.children || {}).length > 0
+    const hasDocuments = (folder.documents || []).length > 0
+    
+    if (hasChildren || hasDocuments) {
+        showNotification('negative', 'Carpeta no vacía', 'Solo se pueden eliminar carpetas vacías')
+        return false
     }
     
-    const pathParts = folderPath.replace(/^\/+|\/+$/g, '').split('/')
-    const folderName = pathParts.pop()
+    // Confirmar eliminación
+    const confirmDelete = confirm(`¿Estás seguro de que quieres eliminar la carpeta "${folder.name}"?`)
+    if (!confirmDelete) return false
     
-    let parentFolder = folderStructure.value['/']
-    
-    // Navegar a la carpeta padre
-    for (const part of pathParts) {
-        if (parentFolder.children && parentFolder.children[part]) {
-            parentFolder = parentFolder.children[part]
-        } else {
-            showNotification('negative', 'Error', 'No se encontró la carpeta a eliminar')
-            return
-        }
-    }
-    
-    if (parentFolder.children && parentFolder.children[folderName]) {
-        delete parentFolder.children[folderName]
-        saveFolderStructure()
-        showNotification('positive', 'Carpeta eliminada', `La carpeta "${folderName}" ha sido eliminada`)
+    try {
+        console.log('📤 Eliminando carpeta:', folderPath)
         
-        // Si estamos dentro de la carpeta eliminada, navegar al padre
-        if (getCurrentPath().includes(folderPath)) {
-            navigateToFolder('/' + pathParts.join('/'))
+        const encodedPath = encodeURIComponent(folderPath)
+        const response = await axios.delete(`${API_BASE_URL}/folders/${encodedPath}`)
+        
+        if (response.data.success) {
+            showNotification('positive', 'Carpeta eliminada', `Carpeta "${folder.name}" eliminada exitosamente`)
+            console.log('✅ Carpeta eliminada')
+            
+            // Si estábamos en esa carpeta, navegar al padre
+            if (getCurrentPathString() === folderPath) {
+                navigateToFolder(folder.parent || '/')
+            }
+            
+            // Recargar estructura desde el backend
+            await initializeFolderStructure()
+            
+            return true
+        } else {
+            showNotification('negative', 'Error', response.data.message)
+            return false
         }
-    } else {
-        showNotification('negative', 'Error', 'No se encontró la carpeta a eliminar')
+    } catch (error) {
+        console.error('❌ Error al eliminar carpeta:', error)
+        const errorMessage = error.response?.data?.message || 'No se pudo conectar con el servidor'
+        showNotification('negative', 'Error al eliminar carpeta', errorMessage)
+        return false
     }
 }
 
@@ -2128,7 +2151,7 @@ function cancelMoveDocument() {
  */
 async function confirmMoveDocument() {
     if (selectedDocumentToMove.value && selectedDestinationFolder.value) {
-        moveDocumentToFolder(selectedDocumentToMove.value._id, selectedDestinationFolder.value)
+        await moveDocumentToFolder(selectedDocumentToMove.value._id, selectedDestinationFolder.value)
         showMoveItemsDialog.value = false
         selectedDocumentToMove.value = null
         selectedDestinationFolder.value = null
@@ -2171,21 +2194,34 @@ function getAvailableFolders() {
 }
 
 /**
- * Mover documento a carpeta específica
+ * Mover documento a carpeta específica usando el backend
  */
-function moveDocumentToFolder(documentId, targetFolderPath) {
+async function moveDocumentToFolder(documentId, targetFolderPath) {
     try {
-        // Encontrar y actualizar el documento
-        const docIndex = rows.value.findIndex(doc => doc._id === documentId)
-        if (docIndex !== -1) {
-            rows.value[docIndex].folderPath = targetFolderPath
-            showNotification('positive', 'Documento movido', `Documento movido exitosamente`)
+        console.log('📤 Moviendo documento:', { documentId, targetFolderPath })
+        
+        const response = await axios.put(`${API_BASE_URL}/${documentId}/move`, {
+            targetFolderPath: targetFolderPath
+        })
+        
+        if (response.data.success) {
+            showNotification('positive', 'Documento movido', 'Documento movido exitosamente')
+            console.log('✅ Documento movido:', response.data.data)
+            
+            // Recargar documentos y estructura
+            await loadDocuments()
+            await initializeFolderStructure()
+            
+            return true
         } else {
-            showNotification('negative', 'Error', 'No se encontró el documento')
+            showNotification('negative', 'Error', response.data.message)
+            return false
         }
     } catch (error) {
-        console.error('Error moving document:', error)
-        showNotification('negative', 'Error', 'No se pudo mover el documento')
+        console.error('❌ Error al mover documento:', error)
+        const errorMessage = error.response?.data?.message || 'No se pudo conectar con el servidor'
+        showNotification('negative', 'Error al mover documento', errorMessage)
+        return false
     }
 }
 
@@ -2292,11 +2328,31 @@ async function downloadDocuments(documentData) {
 async function getDocuments() {
     try {
         loading.value = true
-        const response = await getData('/control-interno')
+        console.log('📥 Cargando documentos de control interno...')
         
-        if (response && Array.isArray(response)) {
+        const response = await getData('/control-interno')
+        console.log('📦 Respuesta del servidor:', response)
+        
+        // El backend puede devolver { success: true, data: [...] } o directamente un array
+        let documents = []
+        
+        if (response && response.success && Array.isArray(response.data)) {
+            // Estructura: { success: true, data: [...] }
+            documents = response.data
+            console.log('✅ Datos extraídos de response.data')
+        } else if (Array.isArray(response)) {
+            // Estructura directa: [...]
+            documents = response
+            console.log('✅ Datos extraídos directamente del response')
+        } else {
+            console.warn('⚠️ La respuesta no contiene los datos esperados:', response)
+            rows.value = []
+            return
+        }
+        
+        if (documents && Array.isArray(documents)) {
             // Procesar los datos para añadir propiedades calculadas
-            rows.value = response.map(doc => ({
+            rows.value = documents.map(doc => ({
                 ...doc,
                 tieneArchivos: doc.documentos && doc.documentos.length > 0,
                 cantidadArchivos: doc.documentos ? doc.documentos.length : 0,
@@ -2313,11 +2369,8 @@ async function getDocuments() {
                 })) : []
             }))
 
-            console.log('✅ Documentos cargados:', rows.value.length)
+            console.log('✅ Documentos procesados:', rows.value.length)
             console.log('📄 Datos procesados:', rows.value)
-        } else {
-            console.log('⚠️ La respuesta no contiene los datos esperados')
-            rows.value = []
         }
     } catch (err) {
         console.error('❌ Error al obtener los documentos:', err)
@@ -2401,9 +2454,11 @@ async function uploadToBackend(file, metadata, progressCallback) {
     }
 }
 
-onMounted(() => {
-    loadDocuments();
-    initializeFolderStructure();
+onMounted(async () => {
+    console.log('🚀 Inicializando vista de control interno...')
+    await initializeFolderStructure()
+    await loadDocuments()
+    console.log('✅ Vista inicializada')
 });
 </script>
 

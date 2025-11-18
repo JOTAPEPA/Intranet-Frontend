@@ -58,7 +58,7 @@
                     <div class="action-buttons-section">
                         <!-- Botones principales -->
                         <div class="primary-actions">
-                            <q-btn
+                            <q-btn style="margin-right: 15px; width: 225px; border-radius: 15px"
                                 v-for="item in backdropFilterList"
                                 :key="item.label"
                                 unelevated
@@ -71,7 +71,7 @@
                                 <q-tooltip>Subir documentos de contabilidad</q-tooltip>
                             </q-btn>
                             
-                            <q-btn
+                            <q-btn style="border-radius: 15px"
                                 color="secondary"
                                 label="Nueva Carpeta"
                                 icon="create_new_folder"
@@ -852,6 +852,9 @@ import DepartmentChip from '../components/DepartmentChip.vue'
 const router = useRouter()
 const loading = ref(false)
 
+// ⭐ Configuración de la API
+const API_BASE_URL = 'http://localhost:5000/api/contabilidad'
+
 // Función para mostrar notificaciones (temporal)
 function showNotification(type, message, caption = '') {
     const fullMessage = caption ? `${message}\n${caption}` : message
@@ -1289,11 +1292,15 @@ async function uploadFiles() {
                 formData.append('documento', individualTitle)
                 formData.append('documentos', file)
                 
-                console.log(`📄 Subiendo archivo ${index + 1}/${totalFiles}:`, file.name)
+                // ⭐ IMPORTANTE: Agregar folderPath de la carpeta actual o seleccionada
+                const targetFolder = selectedUploadFolder.value || getCurrentPathString()
+                formData.append('folderPath', targetFolder)
+                
+                console.log(`📄 Subiendo archivo ${index + 1}/${totalFiles}:`, file.name, 'a carpeta:', targetFolder)
                 
                 // Subir el archivo individual
                 const response = await axios.post(
-                    'http://localhost:5000/api/contabilidad',
+                    API_BASE_URL,
                     formData,
                     {
                         headers: {
@@ -1332,28 +1339,10 @@ async function uploadFiles() {
                 filesUploaded: successfulUploads
             }
             
-            // Asignar documentos subidos a la carpeta seleccionada
-            if (selectedUploadFolder.value && selectedUploadFolder.value !== '/') {
-                // Obtener los IDs de los documentos recién creados y asignarlos a la carpeta
-                try {
-                    // Recargar documentos para obtener los nuevos IDs
-                    await loadDocuments()
-                    
-                    // Los documentos más recientes deberían ser los que acabamos de subir
-                    const recentDocuments = rows.value
-                        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-                        .slice(0, successfulUploads)
-                    
-                    // Asignar cada documento a la carpeta seleccionada
-                    recentDocuments.forEach(doc => {
-                        moveDocumentToFolder(doc._id, selectedUploadFolder.value)
-                    })
-                    
-                    console.log(`📁 ${successfulUploads} documento(s) asignado(s) a carpeta:`, selectedUploadFolder.value)
-                } catch (error) {
-                    console.warn('⚠️ Error al asignar documentos a carpeta:', error)
-                }
-            }
+            // ⭐ Recargar estructura de carpetas desde el backend
+            // El backend ya asignó los documentos a la carpeta correcta
+            await initializeFolderStructure()
+            console.log(`✅ ${successfulUploads} documento(s) subido(s) exitosamente`)
  
         } else if (successfulUploads > 0) {
             // Algunos archivos fallaron
@@ -1648,10 +1637,28 @@ async function getDocuments() {
         console.log('📥 Cargando documentos de contabilidad...');
         
         const response = await getData('/contabilidad');
+        console.log('📦 Respuesta del servidor:', response);
         
-        if (response && Array.isArray(response)) {
+        // El backend puede devolver { success: true, data: [...] } o directamente un array
+        let documents = [];
+        
+        if (response && response.success && Array.isArray(response.data)) {
+            // Estructura: { success: true, data: [...] }
+            documents = response.data;
+            console.log('✅ Datos extraídos de response.data');
+        } else if (Array.isArray(response)) {
+            // Estructura directa: [...]
+            documents = response;
+            console.log('✅ Datos extraídos directamente del response');
+        } else {
+            console.warn('⚠️ La respuesta no contiene los datos esperados:', response);
+            rows.value = [];
+            return;
+        }
+        
+        if (documents && Array.isArray(documents)) {
             // Procesar los datos para añadir propiedades calculadas
-            rows.value = response.map(doc => ({
+            rows.value = documents.map(doc => ({
                 ...doc,
                 tieneArchivos: doc.documentos && doc.documentos.length > 0,
                 cantidadArchivos: doc.documentos ? doc.documentos.length : 0,
@@ -1667,10 +1674,7 @@ async function getDocuments() {
                 })) : []
             }));
             
-            console.log('✅ Documentos cargados:', rows.value.length);
-        } else {
-            console.log('⚠️ La respuesta no contiene los datos esperados');
-            rows.value = [];
+            console.log('✅ Documentos procesados:', rows.value.length);
         }
     } catch (err) {
         console.error('❌ Error al obtener los documentos:', err);
@@ -1834,9 +1838,19 @@ async function deleteDocument(document) {
         // Usar el cliente API para hacer petición DELETE
         await deleteData(`/contabilidad/${document._id}`);
         
+        showNotification('positive', 'Documento eliminado', 'El documento y sus archivos fueron eliminados exitosamente');
         
         // Recargar la lista de documentos
         await loadDocuments();
+        
+        // ⭐ Recargar estructura de carpetas desde el backend
+        await initializeFolderStructure();
+        
+        // Cerrar el diálogo de visualización si está abierto
+        if (viewDocumentDialog.value && selectedDocumentForView.value?._id === document._id) {
+            viewDocumentDialog.value = false;
+            selectedDocumentForView.value = null;
+        }
         
     } catch (error) {
         console.error('❌ Error eliminando documento:', error);
@@ -1963,59 +1977,29 @@ async function uploadToBackend(file, metadata, progressCallback) {
 // ========== FUNCIONES DEL GESTOR DE CARPETAS ==========
 
 /**
- * Inicializa la estructura de carpetas desde localStorage
+ * Inicializa la estructura de carpetas desde el backend
  */
-function initializeFolderStructure() {
+async function initializeFolderStructure() {
     try {
-        const saved = localStorage.getItem('contabilidad-folder-structure')
-        if (saved) {
-            const parsed = JSON.parse(saved)
-            if (parsed && typeof parsed === 'object') {
-                folderStructure.value = parsed
-            } else {
-                console.warn('⚠️ Estructura de carpetas guardada inválida, creando nueva')
-                createDefaultStructure()
-            }
-        } else {
-            createDefaultStructure()
-        }
+        console.log('📡 Cargando estructura de carpetas desde backend...')
+        const response = await axios.get(`${API_BASE_URL}/folders`)
         
-        console.log('📁 Estructura de carpetas inicializada:', folderStructure.value)
-    } catch (error) {
-        console.error('Error al inicializar estructura de carpetas:', error)
-        createDefaultStructure()
-    }
-}
-
-/**
- * Crea la estructura por defecto de carpetas
- */
-function createDefaultStructure() {
-    folderStructure.value = {
-        '/': {
-            id: 'root',
-            name: 'Documentos',
-            type: 'folder',
-            path: '/',
-            parent: null,
-            children: {},
-            documents: [],
-            createdAt: new Date().toISOString()
+        if (response.data.success) {
+            folderStructure.value = response.data.data
+            console.log('✅ Estructura de carpetas cargada:', folderStructure.value)
+        } else {
+            console.warn('⚠️ Error al cargar estructura:', response.data.message)
+            folderStructure.value = {}
         }
+    } catch (error) {
+        console.error('❌ Error al cargar estructura de carpetas:', error)
+        showNotification('negative', 'Error al cargar carpetas', 'No se pudo conectar con el servidor')
+        folderStructure.value = {}
     }
-    saveFolderStructure()
 }
 
-/**
- * Guarda la estructura de carpetas en localStorage
- */
-function saveFolderStructure() {
-    try {
-        localStorage.setItem('contabilidad-folder-structure', JSON.stringify(folderStructure.value))
-    } catch (error) {
-        console.error('Error al guardar estructura de carpetas:', error)
-    }
-}
+// ⭐ Las funciones createDefaultStructure y saveFolderStructure ya no son necesarias
+// El backend maneja la persistencia de datos
 
 /**
  * Obtiene la ruta completa actual como string
@@ -2028,10 +2012,10 @@ function getCurrentPathString() {
  * Obtiene la carpeta actual
  */
 function getCurrentFolder() {
-    // Asegurar que la estructura esté inicializada
+    // ⭐ Si la estructura no está cargada, retornar carpeta raíz por defecto
     if (!folderStructure.value || Object.keys(folderStructure.value).length === 0) {
-        initializeFolderStructure()
-        return folderStructure.value['/'] || {
+        console.warn('⚠️ Estructura de carpetas no cargada, retornando carpeta raíz por defecto')
+        return {
             id: 'root',
             name: 'Documentos',
             type: 'folder',
@@ -2098,7 +2082,7 @@ function getCurrentFolderItems() {
 }
 
 /**
- * Crear una nueva carpeta
+ * Crear una nueva carpeta usando el backend
  */
 async function createFolder(name, parentPath = null) {
     if (!name || name.trim() === '') {
@@ -2108,45 +2092,37 @@ async function createFolder(name, parentPath = null) {
     
     const trimmedName = name.trim()
     const currentPath = parentPath || getCurrentPathString()
-    const newPath = currentPath === '/' ? `/${trimmedName}/` : `${currentPath}${trimmedName}/`
     
-    // Verificar que la carpeta no exista
-    if (folderStructure.value[newPath]) {
-        showNotification('negative', 'Carpeta existente', 'Ya existe una carpeta con ese nombre')
+    try {
+        console.log('📤 Creando carpeta:', { name: trimmedName, parentPath: currentPath })
+        
+        const response = await axios.post(`${API_BASE_URL}/folders`, {
+            name: trimmedName,
+            parentPath: currentPath
+        })
+        
+        if (response.data.success) {
+            showNotification('positive', 'Carpeta creada', `Carpeta "${trimmedName}" creada exitosamente`)
+            console.log('✅ Carpeta creada:', response.data.data)
+            
+            // Recargar estructura desde el backend
+            await initializeFolderStructure()
+            
+            return true
+        } else {
+            showNotification('negative', 'Error', response.data.message)
+            return false
+        }
+    } catch (error) {
+        console.error('❌ Error al crear carpeta:', error)
+        const errorMessage = error.response?.data?.message || 'No se pudo conectar con el servidor'
+        showNotification('negative', 'Error al crear carpeta', errorMessage)
         return false
     }
-    
-    // Crear la nueva carpeta
-    const newFolder = {
-        id: `folder_${Date.now()}`,
-        name: trimmedName,
-        type: 'folder',
-        path: newPath,
-        parent: currentPath,
-        children: {},
-        documents: [],
-        createdAt: new Date().toISOString()
-    }
-    
-    // Agregar a la estructura
-    folderStructure.value[newPath] = newFolder
-    
-    // Actualizar el padre para incluir esta carpeta
-    const parentFolder = folderStructure.value[currentPath]
-    if (parentFolder) {
-        if (!parentFolder.children) parentFolder.children = {}
-        parentFolder.children[trimmedName] = newPath
-    }
-    
-    saveFolderStructure()
-    showNotification('positive', 'Carpeta creada', `Carpeta "${trimmedName}" creada exitosamente`)
-    
-    console.log('📁 Nueva carpeta creada:', newFolder)
-    return true
 }
 
 /**
- * Eliminar una carpeta (solo si está vacía)
+ * Eliminar una carpeta usando el backend (solo si está vacía)
  */
 async function deleteFolder(folderPath) {
     const folder = folderStructure.value[folderPath]
@@ -2174,19 +2150,35 @@ async function deleteFolder(folderPath) {
     const confirmDelete = confirm(`¿Estás seguro de que quieres eliminar la carpeta "${folder.name}"?`)
     if (!confirmDelete) return false
     
-    // Eliminar referencia del padre
-    const parentFolder = folderStructure.value[folder.parent]
-    if (parentFolder && parentFolder.children) {
-        delete parentFolder.children[folder.name]
+    try {
+        console.log('📤 Eliminando carpeta:', folderPath)
+        
+        const encodedPath = encodeURIComponent(folderPath)
+        const response = await axios.delete(`${API_BASE_URL}/folders/${encodedPath}`)
+        
+        if (response.data.success) {
+            showNotification('positive', 'Carpeta eliminada', `Carpeta "${folder.name}" eliminada exitosamente`)
+            console.log('✅ Carpeta eliminada')
+            
+            // Si estábamos en esa carpeta, navegar al padre
+            if (getCurrentPathString() === folderPath) {
+                navigateToFolder(folder.parent || '/')
+            }
+            
+            // Recargar estructura desde el backend
+            await initializeFolderStructure()
+            
+            return true
+        } else {
+            showNotification('negative', 'Error', response.data.message)
+            return false
+        }
+    } catch (error) {
+        console.error('❌ Error al eliminar carpeta:', error)
+        const errorMessage = error.response?.data?.message || 'No se pudo conectar con el servidor'
+        showNotification('negative', 'Error al eliminar carpeta', errorMessage)
+        return false
     }
-    
-    // Eliminar la carpeta
-    delete folderStructure.value[folderPath]
-    
-    saveFolderStructure()
-    showNotification('positive', 'Carpeta eliminada', `Carpeta "${folder.name}" eliminada exitosamente`)
-    
-    return true
 }
 
 /**
@@ -2239,30 +2231,35 @@ function getBreadcrumbTrail() {
 }
 
 /**
- * Mover un documento a una carpeta específica
+ * Mover un documento a una carpeta específica usando el backend
  */
-function moveDocumentToFolder(documentId, targetFolderPath) {
-    // Remover el documento de todas las carpetas actuales
-    Object.values(folderStructure.value).forEach(folder => {
-        if (folder.documents) {
-            const index = folder.documents.indexOf(documentId)
-            if (index > -1) {
-                folder.documents.splice(index, 1)
-            }
+async function moveDocumentToFolder(documentId, targetFolderPath) {
+    try {
+        console.log('📤 Moviendo documento:', { documentId, targetFolderPath })
+        
+        const response = await axios.put(`${API_BASE_URL}/${documentId}/move`, {
+            targetFolderPath: targetFolderPath
+        })
+        
+        if (response.data.success) {
+            showNotification('positive', 'Documento movido', 'Documento movido exitosamente')
+            console.log('✅ Documento movido:', response.data.data)
+            
+            // Recargar documentos y estructura
+            await loadDocuments()
+            await initializeFolderStructure()
+            
+            return true
+        } else {
+            showNotification('negative', 'Error', response.data.message)
+            return false
         }
-    })
-    
-    // Agregar el documento a la carpeta destino
-    const targetFolder = folderStructure.value[targetFolderPath]
-    if (targetFolder) {
-        if (!targetFolder.documents) targetFolder.documents = []
-        if (!targetFolder.documents.includes(documentId)) {
-            targetFolder.documents.push(documentId)
-        }
+    } catch (error) {
+        console.error('❌ Error al mover documento:', error)
+        const errorMessage = error.response?.data?.message || 'No se pudo conectar con el servidor'
+        showNotification('negative', 'Error al mover documento', errorMessage)
+        return false
     }
-    
-    saveFolderStructure()
-    showNotification('positive', 'Documento movido', 'Documento movido exitosamente')
 }
 
 /**
@@ -2281,44 +2278,12 @@ function getAvailableFolders() {
 
 /**
  * Asignar documentos huérfanos a la carpeta raíz
+ * ⭐ NOTA: El backend ahora maneja esto automáticamente
+ * Esta función ya no es necesaria pero se mantiene por compatibilidad
  */
 function assignOrphanDocuments() {
-    try {
-        // Asegurar que folderStructure está inicializado
-        if (!folderStructure.value || !folderStructure.value['/']) {
-            initializeFolderStructure()
-        }
-        
-        const rootFolder = folderStructure.value['/']
-        if (!rootFolder.documents) rootFolder.documents = []
-        
-        // Solo procesar si hay documentos cargados
-        if (!Array.isArray(rows.value) || rows.value.length === 0) {
-            console.log('📁 No hay documentos para asignar')
-            return
-        }
-        
-        let assignedCount = 0
-        rows.value.forEach(doc => {
-            if (!doc._id) return // Skip si no tiene ID
-            
-            const isAssigned = Object.values(folderStructure.value).some(folder => 
-                folder.documents && Array.isArray(folder.documents) && folder.documents.includes(doc._id)
-            )
-            
-            if (!isAssigned && !rootFolder.documents.includes(doc._id)) {
-                rootFolder.documents.push(doc._id)
-                assignedCount++
-            }
-        })
-        
-        if (assignedCount > 0) {
-            saveFolderStructure()
-            console.log(`📁 ${assignedCount} documento(s) huérfano(s) asignado(s) a la carpeta raíz`)
-        }
-    } catch (error) {
-        console.error('Error al asignar documentos huérfanos:', error)
-    }
+    console.log('📁 La asignación de documentos huérfanos es manejada por el backend')
+    // El backend asigna automáticamente los documentos sin folderPath a la raíz
 }
 
 /**
@@ -2353,10 +2318,12 @@ function cancelMoveDocument() {
 /**
  * Confirmar el movimiento de documento
  */
-function confirmMoveDocument() {
+async function confirmMoveDocument() {
     if (selectedDocumentToMove.value && selectedDestinationFolder.value) {
-        moveDocumentToFolder(selectedDocumentToMove.value._id, selectedDestinationFolder.value)
-        cancelMoveDocument()
+        const success = await moveDocumentToFolder(selectedDocumentToMove.value._id, selectedDestinationFolder.value)
+        if (success) {
+            cancelMoveDocument()
+        }
     }
 }
 
@@ -2413,19 +2380,24 @@ function onDrop(event, folderPath) {
     }
 }
 
-onMounted(() => {
-    loadDocuments();
-    initializeFolderStructure();
-    // Asegurar que los documentos se asignen después de cargar
-    setTimeout(() => {
-        assignOrphanDocuments();
-    }, 1000);
+onMounted(async () => {
+    console.log('🚀 Inicializando vista de contabilidad...')
+    
+    // Cargar estructura de carpetas desde el backend
+    await initializeFolderStructure()
+    
+    // Cargar documentos
+    await loadDocuments()
+    
+    console.log('✅ Vista de contabilidad inicializada')
 });
 
 </script>
 
 <style scoped>
 /* [Estilos compartidos - mismo CSS que los otros módulos] */
+
+
 .admin-container {
     display: flex;
     min-height: 100vh;
@@ -4732,7 +4704,6 @@ onMounted(() => {
 }
 
 .file-types-container {
-    display: flex;
     flex-wrap: wrap;
     gap: 4px;
 }
