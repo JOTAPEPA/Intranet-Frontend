@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Integración Backend - Compras</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            margin-bottom: 10px;
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .section h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+        }
+        
+        .test-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .test-button {
+            padding: 15px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .test-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+        
+        .test-button:active {
+            transform: translateY(0);
+        }
+        
+        .log-container {
+            margin-top: 20px;
+            background: #1e1e1e;
+            color: #f8f8f2;
+            padding: 20px;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .log-entry {
+            margin-bottom: 8px;
+            padding: 8px;
+            border-radius: 4px;
+        }
+        
+        .log-success {
+            background: rgba(46, 204, 113, 0.2);
+            border-left: 3px solid #2ecc71;
+        }
+        
+        .log-error {
+            background: rgba(231, 76, 60, 0.2);
+            border-left: 3px solid #e74c3c;
+        }
+        
+        .log-info {
+            background: rgba(52, 152, 219, 0.2);
+            border-left: 3px solid #3498db;
+        }
+        
+        .log-warning {
+            background: rgba(241, 196, 15, 0.2);
+            border-left: 3px solid #f1c40f;
+        }
+        
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+        
+        .status-online {
+            background: #2ecc71;
+            color: white;
+        }
+        
+        .status-offline {
+            background: #e74c3c;
+            color: white;
+        }
+        
+        .input-group {
+            margin: 15px 0;
+        }
+        
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .input-group input {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        
+        .input-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .clear-button {
+            background: #e74c3c;
+            margin-top: 10px;
+        }
+        
+        .clear-button:hover {
+            box-shadow: 0 6px 20px rgba(231, 76, 60, 0.6);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧪 Test de Integración Backend - Compras</h1>
+            <p>Verifica la conexión y funcionalidad del administrador de archivos</p>
+            <div style="margin-top: 15px;">
+                <span>Estado del Backend:</span>
+                <span id="backendStatus" class="status status-offline">Offline</span>
+            </div>
+        </div>
+        
+        <div class="content">
+            <!-- Test de Conexión -->
+            <div class="section">
+                <h2>📡 Conexión al Backend</h2>
+                <p>Verifica que el backend esté corriendo y accesible</p>
+                <div class="test-grid">
+                    <button class="test-button" onclick="testConnection()">🔌 Test Conexión</button>
+                    <button class="test-button" onclick="getFolderStructure()">📁 Obtener Estructura</button>
+                </div>
+            </div>
+            
+            <!-- Tests de Carpetas -->
+            <div class="section">
+                <h2>📂 Gestión de Carpetas</h2>
+                <div class="input-group">
+                    <label for="folderName">Nombre de Carpeta:</label>
+                    <input type="text" id="folderName" placeholder="Ej: Contratos 2024">
+                </div>
+                <div class="input-group">
+                    <label for="parentPath">Ruta Padre:</label>
+                    <input type="text" id="parentPath" value="/" placeholder="/">
+                </div>
+                <div class="test-grid">
+                    <button class="test-button" onclick="createTestFolder()">➕ Crear Carpeta</button>
+                    <button class="test-button" onclick="deleteTestFolder()">🗑️ Eliminar Carpeta</button>
+                </div>
+            </div>
+            
+            <!-- Tests de Documentos -->
+            <div class="section">
+                <h2>📄 Gestión de Documentos</h2>
+                <div class="test-grid">
+                    <button class="test-button" onclick="getDocuments()">📋 Listar Documentos</button>
+                    <button class="test-button" onclick="searchDocuments()">🔍 Buscar Documentos</button>
+                </div>
+            </div>
+            
+            <!-- Logs -->
+            <div class="section">
+                <h2>📊 Logs de Actividad</h2>
+                <button class="test-button clear-button" onclick="clearLogs()">🧹 Limpiar Logs</button>
+                <div id="logs" class="log-container">
+                    <div class="log-entry log-info">💡 Haz click en cualquier botón para comenzar las pruebas</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE_URL = 'http://localhost:5000/api/compras';
+        const logsContainer = document.getElementById('logs');
+        
+        // Función para agregar log
+        function addLog(message, type = 'info') {
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry log-${type}`;
+            
+            const timestamp = new Date().toLocaleTimeString();
+            const icon = {
+                'success': '✅',
+                'error': '❌',
+                'info': 'ℹ️',
+                'warning': '⚠️'
+            }[type] || 'ℹ️';
+            
+            logEntry.textContent = `[${timestamp}] ${icon} ${message}`;
+            logsContainer.appendChild(logEntry);
+            logsContainer.scrollTop = logsContainer.scrollHeight;
+        }
+        
+        // Función para limpiar logs
+        function clearLogs() {
+            logsContainer.innerHTML = '<div class="log-entry log-info">💡 Logs limpiados</div>';
+        }
+        
+        // Función para actualizar estado del backend
+        function updateBackendStatus(online) {
+            const statusElement = document.getElementById('backendStatus');
+            if (online) {
+                statusElement.textContent = 'Online';
+                statusElement.className = 'status status-online';
+            } else {
+                statusElement.textContent = 'Offline';
+                statusElement.className = 'status status-offline';
+            }
+        }
+        
+        // Test de conexión
+        async function testConnection() {
+            addLog('Probando conexión con el backend...', 'info');
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/folders`);
+                
+                if (response.ok) {
+                    addLog('✨ Backend respondiendo correctamente!', 'success');
+                    updateBackendStatus(true);
+                } else {
+                    addLog(`Backend respondió con error: ${response.status}`, 'error');
+                    updateBackendStatus(false);
+                }
+            } catch (error) {
+                addLog(`Error de conexión: ${error.message}`, 'error');
+                addLog('Verifica que el backend esté corriendo en http://localhost:5000', 'warning');
+                updateBackendStatus(false);
+            }
+        }
+        
+        // Obtener estructura de carpetas
+        async function getFolderStructure() {
+            addLog('Obteniendo estructura de carpetas...', 'info');
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/folders`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    const folderCount = Object.keys(result.data).length;
+                    addLog(`Estructura obtenida: ${folderCount} carpeta(s)`, 'success');
+                    addLog(`Estructura: ${JSON.stringify(result.data, null, 2)}`, 'info');
+                    updateBackendStatus(true);
+                } else {
+                    addLog(`Error: ${result.message}`, 'error');
+                }
+            } catch (error) {
+                addLog(`Error: ${error.message}`, 'error');
+                updateBackendStatus(false);
+            }
+        }
+        
+        // Crear carpeta de prueba
+        async function createTestFolder() {
+            const folderName = document.getElementById('folderName').value.trim();
+            const parentPath = document.getElementById('parentPath').value.trim() || '/';
+            
+            if (!folderName) {
+                addLog('Por favor ingresa un nombre de carpeta', 'warning');
+                return;
+            }
+            
+            addLog(`Creando carpeta "${folderName}" en "${parentPath}"...`, 'info');
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/folders`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        name: folderName,
+                        parentPath: parentPath
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    addLog(`Carpeta creada exitosamente: ${result.data.path}`, 'success');
+                    addLog(`ID: ${result.data.id}`, 'info');
+                    document.getElementById('folderName').value = '';
+                } else {
+                    addLog(`Error: ${result.message}`, 'error');
+                }
+            } catch (error) {
+                addLog(`Error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Eliminar carpeta de prueba
+        async function deleteTestFolder() {
+            const folderName = document.getElementById('folderName').value.trim();
+            const parentPath = document.getElementById('parentPath').value.trim() || '/';
+            
+            if (!folderName) {
+                addLog('Por favor ingresa el nombre de la carpeta a eliminar', 'warning');
+                return;
+            }
+            
+            // Construir path completo
+            const folderPath = parentPath === '/' ? `/${folderName}/` : `${parentPath}${folderName}/`;
+            
+            if (!confirm(`¿Eliminar la carpeta "${folderPath}"?`)) {
+                addLog('Eliminación cancelada', 'info');
+                return;
+            }
+            
+            addLog(`Eliminando carpeta "${folderPath}"...`, 'info');
+            
+            try {
+                const encodedPath = encodeURIComponent(folderPath);
+                const response = await fetch(`${API_BASE_URL}/folders/${encodedPath}`, {
+                    method: 'DELETE'
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    addLog(`Carpeta eliminada exitosamente`, 'success');
+                    document.getElementById('folderName').value = '';
+                } else {
+                    addLog(`Error: ${result.message}`, 'error');
+                }
+            } catch (error) {
+                addLog(`Error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Obtener documentos
+        async function getDocuments() {
+            addLog('Obteniendo lista de documentos...', 'info');
+            
+            try {
+                const response = await fetch(API_BASE_URL);
+                const result = await response.json();
+                
+                if (result.success) {
+                    addLog(`${result.data.length} documento(s) encontrado(s)`, 'success');
+                    
+                    result.data.forEach((doc, index) => {
+                        addLog(`${index + 1}. ${doc.documento} (${doc.cantidadArchivos || 0} archivos) - Carpeta: ${doc.folderPath}`, 'info');
+                    });
+                } else {
+                    addLog(`Error: ${result.message}`, 'error');
+                }
+            } catch (error) {
+                addLog(`Error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Buscar documentos
+        async function searchDocuments() {
+            const query = prompt('Ingresa término de búsqueda:');
+            
+            if (!query) {
+                addLog('Búsqueda cancelada', 'info');
+                return;
+            }
+            
+            addLog(`Buscando "${query}"...`, 'info');
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}?search=${encodeURIComponent(query)}`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    addLog(`${result.data.length} resultado(s) encontrado(s)`, 'success');
+                    
+                    result.data.forEach((doc, index) => {
+                        addLog(`${index + 1}. ${doc.documento} - Carpeta: ${doc.folderPath}`, 'info');
+                    });
+                } else {
+                    addLog(`Error: ${result.message}`, 'error');
+                }
+            } catch (error) {
+                addLog(`Error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Test automático al cargar
+        window.addEventListener('load', () => {
+            addLog('🚀 Página cargada. Probando conexión...', 'info');
+            setTimeout(testConnection, 500);
+        });
+    </script>
+</body>
+</html>
