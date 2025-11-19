@@ -2266,8 +2266,19 @@ async function moveDocumentToFolder(documentId, targetFolderPath) {
  * Obtener lista de carpetas disponibles para mover documentos
  */
 function getAvailableFolders() {
+    // Obtener la carpeta actual del documento seleccionado (solo aplica al mover documentos)
+    const currentDocumentFolder = selectedDocumentToMove.value?.folderPath
+    
     return Object.values(folderStructure.value)
-        .filter(folder => folder.type === 'folder')
+        .filter(folder => {
+            // Filtrar solo carpetas
+            if (folder.type !== 'folder') return false
+            
+            // Si hay un documento siendo movido, excluir su carpeta actual
+            if (currentDocumentFolder && folder.path === currentDocumentFolder) return false
+            
+            return true
+        })
         .map(folder => ({
             label: folder.path === '/' ? 'Documentos (Raíz)' : folder.name,
             value: folder.path,
@@ -4770,6 +4781,25 @@ onMounted(async () => {
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
+}
+
+.document-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem;
+    background: #f0fdf4;
+    border-radius: 8px;
+    border: 1px solid #bbf7d0;
+}
+
+.document-name {
+    font-weight: 600;
+    color: #166534;
+}
+
+.destination-selection {
+    margin: 0.5rem 0;
 }
 
 .folder-picker-list {

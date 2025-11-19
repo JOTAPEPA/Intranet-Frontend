@@ -17,7 +17,7 @@
                 </div>
 
                 <div class="sidebar-menu">
-                    <q-btn flat icon="dashboard" label="Inicio" align="left" class="menu-item active" no-caps />
+                    <q-btn flat icon="home" label="Inicio" align="left" class="menu-item active" no-caps />
 
                     <q-btn flat icon="help" label="Ayuda" align="left" class="menu-item" no-caps />
                 </div>
@@ -34,10 +34,6 @@
                         <p class="page-subtitle">Gestiona Documentos de Riesgos</p>
                     </div>
                     <div class="header-actions">
-                        <q-btn flat round icon="notifications" class="action-btn" size="md">
-                            <q-tooltip>Notificaciones</q-tooltip>
-                            <q-badge color="red" floating>3</q-badge>
-                        </q-btn>
                         <q-btn flat round color="blue-7" icon="person" class="action-btn" size="md">
                             <q-tooltip>Ver Perfil</q-tooltip>
                         </q-btn>
@@ -233,18 +229,6 @@
                                             </q-select>
                                         </div>
                                         
-                                        <q-input 
-                                            v-model="documentTitle" 
-                                            label="Título del documento"
-                                            outlined
-                                            dense
-                                            class="q-mb-md"
-                                            :rules="[val => !!val || 'El título es requerido']"
-                                        >
-                                            <template v-slot:prepend>
-                                                <q-icon name="title" color="blue-7" />
-                                            </template>
-                                        </q-input>
                                         <q-textarea 
                                             v-model="documentDescription" 
                                             label="Descripción (opcional)"
@@ -324,14 +308,7 @@
                                     @click="resetUpload"
                                     icon="refresh"
                                 />
-                                <q-btn 
-                                    v-if="uploadResult && uploadResult.success"
-                                    unelevated 
-                                    label="Subir otro documento" 
-                                    color="primary" 
-                                    @click="resetUpload"
-                                    icon="add"
-                                />
+                            
                             </q-card-actions>
                         </q-card>
                     </q-dialog>
@@ -417,9 +394,9 @@
                         </q-card>
                     </q-dialog>
                     
-                    <!-- Diálogo para crear carpeta -->
-                    <q-dialog v-model="showCreateFolderDialog" persistent>
-                        <q-card class="create-folder-dialog">
+                    <!-- Modal para crear nueva carpeta -->
+                    <q-dialog v-model="showCreateFolderDialog" class="create-folder-dialog">
+                        <q-card class="dialog-card" style="min-width: 400px;">
                             <q-card-section class="dialog-header">
                                 <div class="dialog-title">
                                     <q-icon name="create_new_folder" size="1.5rem" />
@@ -428,39 +405,50 @@
                                 <q-btn flat round dense icon="close" color="white" v-close-popup />
                             </q-card-section>
 
-                            <q-card-section>
+                            <q-card-section class="dialog-content">
                                 <div class="folder-creation-form">
                                     <div class="current-location">
-                                        <q-icon name="info" color="blue-7" size="sm" />
-                                        <span class="location-label">Ubicación actual:</span>
-                                        <span class="location-path">{{ getCurrentPathString() }}</span>
+                                        <q-icon name="folder" color="blue-7" size="sm" />
+                                        <span class="location-text">Ubicación actual:</span>
+                                        <span class="location-path">{{ getCurrentPathString() === '/' ? 'Documentos (Raíz)' : getCurrentPathString() }}</span>
                                     </div>
                                     
-                                    <q-input
+                                    <q-input 
                                         v-model="newFolderName"
                                         label="Nombre de la carpeta"
                                         outlined
                                         dense
                                         autofocus
                                         :rules="folderNameRules"
-                                        class="q-mt-md"
+                                        @keyup.enter="confirmCreateFolder"
                                     >
                                         <template v-slot:prepend>
                                             <q-icon name="folder" color="blue-7" />
                                         </template>
                                     </q-input>
+                                    
+                                    <div class="creation-hint">
+                                        <q-icon name="info" color="blue-7" size="sm" />
+                                        <span>La carpeta se creará en la ubicación actual</span>
+                                    </div>
                                 </div>
                             </q-card-section>
 
-                            <q-card-actions align="right" class="q-pa-md">
-                                <q-btn flat label="Cancelar" color="grey-7" v-close-popup />
-                                <q-btn
-                                    unelevated
-                                    label="Crear"
-                                    color="primary"
-                                    icon="add"
+                            <q-card-actions class="dialog-actions">
+                                <q-btn 
+                                    flat 
+                                    label="Cancelar" 
+                                    color="grey-7" 
+                                    v-close-popup
+                                    @click="newFolderName = ''"
+                                />
+                                <q-btn 
+                                    unelevated 
+                                    label="Crear Carpeta" 
+                                    color="primary" 
                                     @click="confirmCreateFolder"
-                                    :disable="!newFolderName"
+                                    :disabled="!newFolderName || newFolderName.trim() === ''"
+                                    icon="create_new_folder"
                                 />
                             </q-card-actions>
                         </q-card>
@@ -477,19 +465,18 @@
                                 <q-btn flat round dense icon="close" color="white" @click="cancelMoveDocument" />
                             </q-card-section>
 
-                            <q-card-section>
+                            <q-card-section class="dialog-content" v-if="selectedDocumentToMove">
                                 <div class="move-document-form">
-                                    <div class="document-info" v-if="selectedDocumentToMove">
+                                    <div class="document-info">
                                         <q-icon name="description" color="green-7" size="sm" />
-                                        <span class="document-label">Documento:</span>
                                         <span class="document-name">{{ selectedDocumentToMove.documento }}</span>
                                     </div>
                                     
-                                    <div class="destination-selection q-mt-md">
+                                    <div class="destination-selection">
                                         <q-select
                                             v-model="selectedDestinationFolder"
                                             :options="getAvailableFolders()"
-                                            label="Carpeta destino"
+                                            label="Seleccionar carpeta destino"
                                             outlined
                                             dense
                                             option-label="label"
@@ -500,10 +487,12 @@
                                             <template v-slot:prepend>
                                                 <q-icon name="folder" color="blue-7" />
                                             </template>
-                                            <template v-slot:hint>
-                                                Selecciona la carpeta de destino
-                                            </template>
                                         </q-select>
+                                    </div>
+                                    
+                                    <div class="move-hint">
+                                        <q-icon name="info" color="blue-7" size="sm" />
+                                        <span>El documento se moverá a la carpeta seleccionada</span>
                                     </div>
                                 </div>
                             </q-card-section>
@@ -572,13 +561,14 @@
                             <div class="table-header-section">
                                 <div class="table-title-container">
                                     <h5 class="table-title">Documentos</h5>
-                                    <DepartmentChip 
+                                   
+                                </div>
+                                 <DepartmentChip 
                                         department-key="riesgos" 
                                         variant="table"
                                         size="sm"
                                         dense
                                     />
-                                </div>
                                 <q-space />
                                 <div class="search-container">
                                     <q-input v-model="searchTerm" dense outlined
@@ -1748,8 +1738,19 @@ async function moveDocumentToFolder(documentId, targetFolderPath) {
  * Obtener lista de carpetas disponibles para mover documentos
  */
 function getAvailableFolders() {
+    // Obtener la carpeta actual del documento seleccionado (solo aplica al mover documentos)
+    const currentDocumentFolder = selectedDocumentToMove.value?.folderPath
+    
     return Object.values(folderStructure.value)
-        .filter(folder => folder.type === 'folder')
+        .filter(folder => {
+            // Filtrar solo carpetas
+            if (folder.type !== 'folder') return false
+            
+            // Si hay un documento siendo movido, excluir su carpeta actual
+            if (currentDocumentFolder && folder.path === currentDocumentFolder) return false
+            
+            return true
+        })
         .map(folder => ({
             label: folder.path === '/' ? 'Documentos (Raíz)' : folder.name,
             value: folder.path,
@@ -2807,6 +2808,7 @@ async function deleteDocument(document) {
     padding: 1.5rem;
     border-bottom: 1px solid var(--border-color);
     gap: 1rem;
+    margin-left: -25px
 }
 
 .table-title {
@@ -3758,11 +3760,10 @@ async function deleteDocument(document) {
 
 /* Navegación breadcrumb */
 .breadcrumb-navigation {
-    background: white;
+    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+    border-bottom: 2px solid #e2e8f0;
     padding: 1rem 1.5rem;
-    border-radius: 12px;
-    margin-bottom: 1.5rem;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    margin-bottom: 0;
 }
 
 .breadcrumb-content {
@@ -3920,6 +3921,19 @@ async function deleteDocument(document) {
     padding: 0.25rem 0.5rem;
     border-radius: 4px;
     font-size: 0.9rem;
+}
+
+.creation-hint,
+.move-hint {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    color: #64748b;
+    background: rgba(59, 130, 246, 0.05);
+    padding: 0.75rem;
+    border-radius: 6px;
+    border-left: 4px solid #3b82f6;
 }
 
 .move-document-form {

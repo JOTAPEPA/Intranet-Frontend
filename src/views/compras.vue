@@ -2401,8 +2401,19 @@ async function moveDocumentToFolder(documentId, targetFolderPath) {
  * Obtener lista de carpetas disponibles para mover documentos
  */
 function getAvailableFolders() {
+    // Obtener la carpeta actual del documento seleccionado (solo aplica al mover documentos)
+    const currentDocumentFolder = selectedDocumentToMove.value?.folderPath
+    
     return Object.values(folderStructure.value)
-        .filter(folder => folder.type === 'folder')
+        .filter(folder => {
+            // Filtrar solo carpetas
+            if (folder.type !== 'folder') return false
+            
+            // Si hay un documento siendo movido, excluir su carpeta actual
+            if (currentDocumentFolder && folder.path === currentDocumentFolder) return false
+            
+            return true
+        })
         .map(folder => ({
             label: folder.path === '/' ? 'Documentos (Raíz)' : folder.name,
             value: folder.path,

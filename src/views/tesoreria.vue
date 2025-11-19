@@ -17,7 +17,7 @@
                 </div>
 
                 <div class="sidebar-menu">
-                    <q-btn flat icon="dashboard" label="Inicio" align="left" class="menu-item active" no-caps />
+                    <q-btn flat icon="home" label="Inicio" align="left" class="menu-item active" no-caps />
                     <q-btn flat icon="help" label="Ayuda" align="left" class="menu-item" no-caps />
                 </div>
             </div>
@@ -33,10 +33,6 @@
                         <p class="page-subtitle">Gestiona Documentos de Tesorería</p>
                     </div>
                     <div class="header-actions">
-                        <q-btn flat round icon="notifications" class="action-btn" size="md">
-                            <q-tooltip>Notificaciones</q-tooltip>
-                            <q-badge color="red" floating>3</q-badge>
-                        </q-btn>
                         <q-btn flat round color="blue-7" icon="person" class="action-btn" size="md">
                             <q-tooltip>Ver Perfil</q-tooltip>
                         </q-btn>

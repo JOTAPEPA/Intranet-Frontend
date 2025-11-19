@@ -50,8 +50,32 @@
 
                 <!-- Action Section -->
                 <div class="q-pa-md q-gutter-sm">
-                    <q-btn v-for="filter in backdropFilterList" :key="filter.label" color="primary"
-                        :label="filter.label" no-caps @click="filter.onClick" />
+                    <div class="action-buttons-section">
+                        <div class="primary-actions">
+                            <q-btn 
+                                v-for="filter in backdropFilterList" 
+                                :key="filter.label" 
+                                color="primary"
+                                :label="filter.label" 
+                                no-caps 
+                                @click="filter.onClick" 
+                                icon="cloud_upload" 
+                                style="padding: 12px; border-radius: 15px;"
+                            />
+                            
+                            <q-btn
+                                color="secondary"
+                                label="Nueva Carpeta"
+                                icon="create_new_folder"
+                                @click="showCreateFolderDialog = true"
+                                outline
+                                no-caps
+                                style="padding: 12px; border-radius: 15px;"
+                            >
+                                <q-tooltip>Crear nueva carpeta</q-tooltip>
+                            </q-btn>
+                        </div>
+                    </div>
 
                     <q-dialog v-model="dialog" :backdrop-filter="backdropFilter">
                         <q-card class="dialog-card" style="min-width: 500px;">
@@ -102,19 +126,52 @@
 
                                         <!-- Metadatos adicionales -->
                                         <div class="metadata-form">
+                                            <!-- Selector de carpeta destino -->
+                                            <div class="folder-destination-section">
+                                                <q-select
+                                                    v-model="selectedUploadFolder"
+                                                    :options="getAvailableFolders()"
+                                                    label="Carpeta destino"
+                                                    outlined
+                                                    dense
+                                                    option-label="label"
+                                                    option-value="value"
+                                                    emit-value
+                                                    map-options
+                                                    class="folder-selector q-mb-md"
+                                                >
+                                                    <template v-slot:prepend>
+                                                        <q-icon name="folder" color="blue-7" />
+                                                    </template>
+                                                    <template v-slot:hint>
+                                                        Selecciona dónde alojar el documento
+                                                    </template>
+                                                </q-select>
+                                            </div>
+                                            
                                             <q-input 
                                                 v-model="documentTitle" 
                                                 label="Título del documento *" 
                                                 outlined
+                                                dense
                                                 class="q-mb-md"
                                                 :rules="[val => !!val || 'El título es requerido']"
-                                            />
+                                            >
+                                                <template v-slot:prepend>
+                                                    <q-icon name="title" color="blue-7" />
+                                                </template>
+                                            </q-input>
                                             <q-textarea 
                                                 v-model="documentDescription" 
                                                 label="Descripción (opcional)"
                                                 outlined 
-                                                rows="3" 
-                                            />
+                                                dense
+                                                rows="2" 
+                                            >
+                                                <template v-slot:prepend>
+                                                    <q-icon name="description" color="grey-6" />
+                                                </template>
+                                            </q-textarea>
                                         </div>
                                     </div>
 
@@ -236,11 +293,183 @@
                             </q-card-actions>
                         </q-card>
                     </q-dialog>
+                    
+                    <!-- Modal para crear nueva carpeta -->
+                    <q-dialog v-model="showCreateFolderDialog" class="create-folder-dialog">
+                        <q-card class="dialog-card" style="min-width: 400px;">
+                            <q-card-section class="dialog-header">
+                                <div class="dialog-title">
+                                    <q-icon name="create_new_folder" size="1.5rem" />
+                                    <h6>Crear Nueva Carpeta</h6>
+                                </div>
+                                <q-btn flat round dense icon="close" color="white" v-close-popup />
+                            </q-card-section>
+
+                            <q-card-section class="dialog-content">
+                                <div class="folder-creation-form">
+                                    <div class="current-location">
+                                        <q-icon name="folder" color="blue-7" size="sm" />
+                                        <span class="location-text">Ubicación actual:</span>
+                                        <span class="location-path">{{ getCurrentPathString() === '/' ? 'Documentos (Raíz)' : getCurrentPathString() }}</span>
+                                    </div>
+                                    
+                                    <q-input 
+                                        v-model="newFolderName"
+                                        label="Nombre de la carpeta"
+                                        outlined
+                                        dense
+                                        autofocus
+                                        :rules="folderNameRules"
+                                        @keyup.enter="confirmCreateFolder"
+                                    >
+                                        <template v-slot:prepend>
+                                            <q-icon name="folder" color="blue-7" />
+                                        </template>
+                                    </q-input>
+                                    
+                                    <div class="creation-hint">
+                                        <q-icon name="info" color="blue-7" size="sm" />
+                                        <span>La carpeta se creará en la ubicación actual</span>
+                                    </div>
+                                </div>
+                            </q-card-section>
+
+                            <q-card-actions class="dialog-actions">
+                                <q-btn 
+                                    flat 
+                                    label="Cancelar" 
+                                    color="grey-7" 
+                                    v-close-popup
+                                    @click="newFolderName = ''"
+                                />
+                                <q-btn 
+                                    unelevated 
+                                    label="Crear Carpeta" 
+                                    color="primary" 
+                                    @click="confirmCreateFolder"
+                                    :disabled="!newFolderName || newFolderName.trim() === ''"
+                                    icon="create_new_folder"
+                                />
+                            </q-card-actions>
+                        </q-card>
+                    </q-dialog>
+
+                    <!-- Modal para mover documentos -->
+                    <q-dialog v-model="showMoveItemsDialog" class="move-items-dialog">
+                        <q-card class="dialog-card" style="min-width: 500px;">
+                            <q-card-section class="dialog-header">
+                                <div class="dialog-title">
+                                    <q-icon name="drive_file_move" size="1.5rem" />
+                                    <h6>Mover Documento</h6>
+                                </div>
+                                <q-btn flat round dense icon="close" color="white" v-close-popup />
+                            </q-card-section>
+
+                            <q-card-section class="dialog-content" v-if="selectedDocumentToMove">
+                                <div class="move-document-form">
+                                    <div class="document-info">
+                                        <q-icon name="description" color="green-7" size="sm" />
+                                        <span class="document-name">{{ selectedDocumentToMove.documento }}</span>
+                                    </div>
+                                    
+                                    <div class="destination-selection">
+                                        <q-select
+                                            v-model="selectedDestinationFolder"
+                                            :options="getAvailableFolders()"
+                                            label="Seleccionar carpeta destino"
+                                            outlined
+                                            dense
+                                            option-label="label"
+                                            option-value="value"
+                                            emit-value
+                                            map-options
+                                        >
+                                            <template v-slot:prepend>
+                                                <q-icon name="folder" color="blue-7" />
+                                            </template>
+                                        </q-select>
+                                    </div>
+                                    
+                                    <div class="move-hint">
+                                        <q-icon name="info" color="blue-7" size="sm" />
+                                        <span>El documento se moverá a la carpeta seleccionada</span>
+                                    </div>
+                                </div>
+                            </q-card-section>
+
+                            <q-card-actions class="dialog-actions">
+                                <q-btn 
+                                    flat 
+                                    label="Cancelar" 
+                                    color="grey-7" 
+                                    v-close-popup
+                                    @click="cancelMoveDocument"
+                                />
+                                <q-btn 
+                                    unelevated 
+                                    label="Mover Documento" 
+                                    color="primary" 
+                                    @click="confirmMoveDocument"
+                                    :disabled="!selectedDestinationFolder"
+                                    icon="drive_file_move"
+                                />
+                            </q-card-actions>
+                        </q-card>
+                    </q-dialog>
                 </div>
                 <!-- Data Table -->
                 <div class="table-container">
-                    <q-table :rows="rows" :columns="columns" row-key="index" flat class="data-table"
-                        :rows-per-page-options="[5, 10, 20]" separator="horizontal" :loading="loading">
+                    <!-- Navegación breadcrumb -->
+                    <div class="breadcrumb-navigation">
+                        <div class="breadcrumb-content">
+                            <q-icon name="folder" color="blue-7" size="sm" class="breadcrumb-icon" />
+                            <div class="breadcrumb-path">
+                                <template v-for="(crumb, index) in getBreadcrumbTrail()" :key="crumb.path">
+                                    <q-btn
+                                        flat
+                                        dense
+                                        :label="crumb.name"
+                                        @click="navigateToBreadcrumb(crumb.index)"
+                                        :class="{ 'current-crumb': index === getBreadcrumbTrail().length - 1 }"
+                                        class="breadcrumb-item"
+                                    />
+                                    <q-icon 
+                                        v-if="index < getBreadcrumbTrail().length - 1" 
+                                        name="keyboard_arrow_right" 
+                                        color="grey-5" 
+                                        size="sm"
+                                        class="breadcrumb-separator"
+                                    />
+                                </template>
+                            </div>
+                            <q-space />
+                            <div class="breadcrumb-actions">
+                                <q-btn
+                                    v-if="currentFolderPath.length > 0"
+                                    flat
+                                    round
+                                    dense
+                                    icon="arrow_back"
+                                    color="blue-7"
+                                    @click="navigateUp"
+                                    size="sm"
+                                >
+                                    <q-tooltip>Volver atrás</q-tooltip>
+                                </q-btn>
+                            </div>
+                        </div>
+                    </div>
+
+                    <q-table 
+                        :rows="getCurrentFolderItems()" 
+                        :columns="folderColumns" 
+                        row-key="index" 
+                        flat 
+                        class="data-table"
+                        :rows-per-page-options="[5, 10, 20]" 
+                        separator="horizontal" 
+                        :loading="loading"
+                    >
                         <template v-slot:top>
                             <div class="table-header-section">
                                 <div class="table-title-container">
@@ -258,7 +487,7 @@
                                         placeholder="Buscar documentos o archivos..." class="search-input"
                                         @update:model-value="searchDocuments" debounce="300">
                                         <template v-slot:prepend>
-                                            <q-icon name="search" />
+                                            <q-icon name="search" color="blue-7" />
                                         </template>
                                         <template v-slot:append>
                                             <q-btn v-if="searchTerm" flat round dense icon="clear"
@@ -278,100 +507,162 @@
                             </q-tr>
                         </template>
 
-                                <template v-slot:body="props">
-                            <q-tr :props="props" class="table-row">
+                        <template v-slot:body="props">
+                            <q-tr 
+                                :props="props" 
+                                class="table-row"
+                                :draggable="props.row.itemType === 'document'"
+                                @dragstart="onDragStart($event, props.row)"
+                                @dragover="props.row.itemType === 'folder' ? onDragOver($event, props.row.path) : null"
+                                @dragleave="props.row.itemType === 'folder' ? onDragLeave(props.row.path) : null"
+                                @drop="props.row.itemType === 'folder' ? onDrop($event, props.row.path) : null"
+                                :class="{ 
+                                    'drag-over': dragOverFolder === props.row.path,
+                                    'draggable-document': props.row.itemType === 'document'
+                                }"
+                            >
                                 <q-td
                                     v-for="col in props.cols"
                                     :key="col.name"
                                     :props="props"
                                     class="table-cell"
                                 >
+                                    <!-- Acciones -->
                                     <div v-if="col.name === 'acciones'" class="action-buttons-cell">
-                                        <q-btn
-                                            flat
-                                            round
-                                            color="blue-7"
-                                            icon="visibility"
-                                            size="sm"
-                                            @click="viewDocument(props.row)"
-                                            :disabled="!props.row.tieneArchivos"
-                                            class="action-btn-small"
-                                        >
-                                            <q-tooltip>Ver detalles</q-tooltip>
-                                        </q-btn>
+                                        <!-- Acciones para carpetas -->
+                                        <template v-if="props.row.itemType === 'folder'">
+                                            <q-btn
+                                                flat
+                                                round
+                                                color="blue-7"
+                                                icon="folder_open"
+                                                size="sm"
+                                                @click="navigateToFolder(props.row.path)"
+                                                class="action-btn-small"
+                                            >
+                                                <q-tooltip>Abrir carpeta</q-tooltip>
+                                            </q-btn>
+                                            
+                                            <q-btn
+                                                flat
+                                                round
+                                                color="red-7"
+                                                icon="delete"
+                                                size="sm"
+                                                @click="deleteFolder(props.row.path)"
+                                                :disabled="props.row.path === '/'"
+                                                class="action-btn-small"
+                                            >
+                                                <q-tooltip>Eliminar carpeta</q-tooltip>
+                                            </q-btn>
+                                        </template>
                                         
-                                        <q-btn
-                                            flat
-                                            round
-                                            color="green-7"
-                                            icon="download"
-                                            size="sm"
-                                            @click="downloadDocuments(props.row)"
-                                            :disabled="!props.row.tieneArchivos"
-                                            class="action-btn-small"
-                                        >
-                                            <q-tooltip>Descargar documentos</q-tooltip>
-                                        </q-btn>
-                                        
-                                        <q-btn
-                                            flat
-                                            round
-                                            color="red-6"
-                                            icon="delete"
-                                            size="sm"
-                                            @click="deleteDocument(props.row)"
-                                            class="action-btn-small"
-                                        >
-                                            <q-tooltip>Eliminar documento</q-tooltip>
-                                        </q-btn>
+                                        <!-- Acciones para documentos -->
+                                        <template v-else>
+                                            <q-btn
+                                                flat
+                                                round
+                                                color="green-7"
+                                                icon="download"
+                                                size="sm"
+                                                @click="downloadDocuments(props.row)"
+                                                :disabled="!props.row.tieneArchivos"
+                                                class="action-btn-small"
+                                            >
+                                                <q-tooltip>Descargar documentos</q-tooltip>
+                                            </q-btn>
+                                            
+                                            <q-btn
+                                                flat
+                                                round
+                                                color="orange-7"
+                                                icon="drive_file_move"
+                                                size="sm"
+                                                @click="startMoveDocument(props.row)"
+                                                class="action-btn-small"
+                                            >
+                                                <q-tooltip>Mover a otra carpeta</q-tooltip>
+                                            </q-btn>
+                                            
+                                            <q-btn
+                                                flat
+                                                round
+                                                color="red-7"
+                                                icon="delete"
+                                                size="sm"
+                                                @click="deleteDocument(props.row)"
+                                                class="action-btn-small"
+                                            >
+                                                <q-tooltip>Eliminar documento</q-tooltip>
+                                            </q-btn>
+                                        </template>
                                     </div>
-                                    <div v-else-if="col.name === 'titulo'" class="document-title-cell">
-                                        <div class="document-info">
-                                            <q-icon
-                                                name="description"
-                                                size="md"
-                                                :color="props.row.tieneArchivos ? 'blue-7' : 'grey-5'"
-                                                class="document-icon"
+                                    
+                                    <!-- Celda de nombre -->
+                                    <div v-else-if="col.name === 'nombre'" class="item-name-cell">
+                                        <div class="item-info">
+                                            <q-icon 
+                                                :name="props.row.itemType === 'folder' ? 'folder' : (props.row.tieneArchivos ? 'description' : 'description')"
+                                                :color="props.row.itemType === 'folder' ? 'blue-7' : (props.row.tieneArchivos ? 'green-7' : 'grey-5')"
+                                                size="sm"
+                                                class="item-icon"
                                             />
-                                            <div class="document-details">
-                                                <div class="document-name">{{ col.value }}</div>
-                                                <div v-if="props.row.tieneArchivos" class="document-files-count">
-                                                    {{ props.row.cantidadArchivos }} archivo(s) adjunto(s)
-                                                </div>
-                                                <div v-else class="no-files-text">
-                                                    Sin archivos adjuntos
-                                                </div>
+                                            <div class="item-details">
+                                                <span 
+                                                    class="item-name clickable-item"
+                                                    @click="props.row.itemType === 'folder' ? navigateToFolder(props.row.path) : viewDocument(props.row)"
+                                                >
+                                                    {{ props.row.itemType === 'folder' ? props.row.name : props.row.documento }}
+                                                </span>
+                                                <span v-if="props.row.itemType === 'document' && props.row.tieneArchivos" class="item-files-count">
+                                                    {{ props.row.cantidadArchivos }} archivo(s)
+                                                </span>
+                                                <span v-else-if="props.row.itemType === 'document'" class="no-files-text">Sin archivos</span>
                                             </div>
                                         </div>
                                     </div>
-                                    <div v-else-if="col.name === 'tipoArchivo'" class="file-type-cell">
-                                        <div v-if="props.row.tieneArchivos" class="file-type-chips">
-                                            <q-chip
-                                                v-for="tipo in getUniqueFileTypes(props.row.documentos)"
-                                                :key="tipo"
-                                                :color="getFileTypeColor(tipo)"
-                                                :text-color="getFileTypeTextColor(tipo)"
-                                                :icon="getFileTypeIcon(tipo)"
-                                                size="sm"
-                                                class="file-type-chip"
-                                            >
-                                                {{ tipo.toUpperCase() }}
-                                            </q-chip>
-                                        </div>
-                                        <q-chip v-else color="grey-3" text-color="grey-6" size="sm">
-                                            Sin archivos
-                                        </q-chip>
-                                    </div>
-                                    <div v-else-if="col.name === 'cantidadArchivos'" class="files-count-cell">
-                                        <q-chip
-                                            :color="props.row.tieneArchivos ? 'blue-1' : 'grey-3'"
-                                            :text-color="props.row.tieneArchivos ? 'blue-8' : 'grey-6'"
-                                            :icon="props.row.tieneArchivos ? 'attach_file' : 'attach_file'"
+                                    
+                                    <!-- Chip de tipo -->
+                                    <div v-else-if="col.name === 'tipo'" class="item-type-cell">
+                                        <!-- Chip para carpetas -->
+                                        <q-chip 
+                                            v-if="props.row.itemType === 'folder'"
+                                            color="blue-1" 
+                                            text-color="blue-8"
+                                            icon="folder"
                                             size="sm"
                                         >
-                                            {{ col.value }}
+                                            Carpeta
                                         </q-chip>
+                                        
+                                        <!-- Chips para tipos de archivos del documento -->
+                                        <div v-else class="file-types-container">
+                                            <template v-if="props.row.tieneArchivos && props.row.documentos">
+                                                <q-chip 
+                                                    v-for="tipo in getUniqueFileTypes(props.row.documentos)"
+                                                    :key="tipo"
+                                                    :color="getFileTypeColor(tipo)"
+                                                    :text-color="getFileTypeTextColor(tipo)"
+                                                    :icon="getFileTypeIcon(tipo)"
+                                                    size="sm"
+                                                    class="file-type-chip"
+                                                >
+                                                    {{ tipo.toUpperCase() }}
+                                                </q-chip>
+                                            </template>
+                                            <q-chip 
+                                                v-else 
+                                                color="grey-3" 
+                                                text-color="grey-6" 
+                                                icon="remove" 
+                                                size="sm"
+                                            >
+                                                Sin archivos
+                                            </q-chip>
+                                        </div>
                                     </div>
+                                    
+                                    <!-- Contenido genérico para otras celdas -->
                                     <span v-else class="cell-content">
                                         {{ col.value }}
                                     </span>
@@ -718,6 +1009,9 @@ import DepartmentChip from '../components/DepartmentChip.vue'
 const router = useRouter()
 const route = useRoute()
 
+// ⭐ Configuración de la API
+const API_BASE_URL = 'http://localhost:5000/api/talento-humano'
+
 // Función para mostrar notificaciones
 function showNotification(type, message, caption = '') {
     const fullMessage = caption ? `${message}\n${caption}` : message
@@ -745,6 +1039,7 @@ const loading = ref(false)
 // Estados para metadatos del documento
 const documentTitle = ref('')
 const documentDescription = ref('')
+const selectedUploadFolder = ref('/') // Carpeta seleccionada para subida
 
 // Referencia al input de archivo
 const fileInput = ref(null)
@@ -758,6 +1053,30 @@ const searchTerm = ref('')
 // Estados para el modal de vista de documentos
 const viewDocumentDialog = ref(false)
 const selectedDocumentForView = ref(null)
+
+// ⭐ Estados para el gestor de carpetas
+const currentView = ref('folders') // Vista principal es siempre carpetas
+const currentFolderPath = ref([]) // Array de carpetas para navegación
+const folderStructure = ref({}) // Estructura jerárquica de carpetas
+const selectedItems = ref([]) // Items seleccionados para operaciones
+const showCreateFolderDialog = ref(false)
+const newFolderName = ref('')
+const dragOverFolder = ref(null)
+
+// Diálogos específicos del gestor de carpetas
+const showFolderOptionsDialog = ref(false)
+const selectedFolder = ref(null)
+const showMoveItemsDialog = ref(false)
+const availableFolders = ref([])
+const selectedDocumentToMove = ref(null)
+const selectedDestinationFolder = ref(null)
+
+// Reglas de validación para nombres de carpetas
+const folderNameRules = [
+    val => !!val || 'El nombre es requerido',
+    val => val.length <= 50 || 'Máximo 50 caracteres',
+    val => !/[<>:"/\\|?*]/.test(val) || 'Caracteres no permitidos'
+]
 
 // Configuración de columnas para la tabla
 const columns = ref([
@@ -810,6 +1129,80 @@ const columns = ref([
     }
 ])
 
+// ⭐ Columnas específicas para la vista de carpetas
+const folderColumns = ref([
+    {
+        name: "nombre",
+        align: "left",
+        label: "Nombre",
+        field: row => row.itemType === 'folder' ? row.name : row.documento,
+        sortable: true,
+    },
+    {
+        name: "tipo",
+        align: "center",
+        label: "Tipo",
+        field: row => {
+            if (row.itemType === 'folder') return 'Carpeta';
+            if (row.documentos && row.documentos.length > 0) {
+                const tipos = [...new Set(row.documentos.map(doc => getFileExtension(doc.originalName)))];
+                return tipos.filter(tipo => tipo !== 'desconocido').join(', ') || 'Desconocido';
+            }
+            return 'Sin archivos';
+        },
+        sortable: true,
+    },
+    {
+        name: "fechaCreacion",
+        align: "center", 
+        label: "Fecha de Creación",
+        field: row => row.itemType === 'folder' ? row.createdAt : row.createdAt,
+        sortable: true,
+        format: (val) => {
+            if (!val) return 'N/A';
+            return new Date(val).toLocaleDateString('es-ES', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            });
+        }
+    },
+    {
+        name: "informacion",
+        align: "center",
+        label: "Información",
+        field: row => {
+            if (row.itemType === 'folder') {
+                const folder = folderStructure.value[row.path]
+                const childCount = Object.keys(folder?.children || {}).length
+                const docCount = (folder?.documents || []).length
+                return `${childCount} carpeta(s), ${docCount} documento(s)`
+            } else {
+                const fileCount = row.documentos?.length || 0
+                if (fileCount === 0) return 'Sin archivos'
+                if (fileCount === 1) return '1 archivo'
+                
+                const tipos = [...new Set((row.documentos || []).map(doc => getFileExtension(doc.originalName)))]
+                    .filter(tipo => tipo !== 'desconocido')
+                
+                if (tipos.length === 1) {
+                    return `${fileCount} archivo(s) ${tipos[0].toUpperCase()}`
+                } else {
+                    return `${fileCount} archivos (${tipos.length} tipos)`
+                }
+            }
+        },
+        sortable: false,
+    },
+    {
+        name: "acciones",
+        align: "center", 
+        label: "Acciones",
+        field: "",
+        sortable: false,
+    }
+])
+
 const rows = ref([])
 
 /**
@@ -854,6 +1247,7 @@ function resetUpload() {
     documentTitle.value = ''
     documentDescription.value = ''
     isAddingMoreFiles.value = false
+    selectedUploadFolder.value = getCurrentPathString() // Mantener carpeta actual
 }
 
 /**
@@ -1079,6 +1473,10 @@ async function uploadFiles() {
             formData.append('documentos', file)
         })
         
+        // ⭐ IMPORTANTE: Agregar folderPath de la carpeta actual o seleccionada
+        const targetFolder = selectedUploadFolder.value || getCurrentPathString()
+        formData.append('folderPath', targetFolder)
+        
         console.log('📤 Subiendo archivos de talento humano:', {
             cantidad: selectedFiles.value.length,
             archivos: selectedFiles.value.map(file => ({
@@ -1086,12 +1484,13 @@ async function uploadFiles() {
                 tipo: file.type,
                 tamaño: file.size
             })),
-            titulo: documentTitle.value
+            titulo: documentTitle.value,
+            carpeta: targetFolder
         })
         
         // Usar axios directamente para tener control del progreso
         const response = await axios.post(
-            'http://localhost:5000/api/talento-humano',
+            API_BASE_URL,
             formData,
             {
                 headers: {
@@ -1120,7 +1519,8 @@ async function uploadFiles() {
         
         showNotification('positive', message, 'Los documentos han sido guardados en el sistema')
         
-        // Recargar la lista de documentos
+        // ⭐ Recargar estructura de carpetas y documentos
+        await initializeFolderStructure()
         await loadDocuments()
         
         // Cerrar modal después de un breve delay
@@ -1537,9 +1937,314 @@ function handleLogout() {
     router.push('/')
 }
 
+// ========== FUNCIONES DEL GESTOR DE CARPETAS ==========
+
+/**
+ * Inicializa la estructura de carpetas desde el backend
+ */
+async function initializeFolderStructure() {
+    try {
+        console.log('📡 Cargando estructura de carpetas desde backend...')
+        const response = await axios.get(`${API_BASE_URL}/folders`)
+        
+        if (response.data.success) {
+            folderStructure.value = response.data.data
+            console.log('✅ Estructura de carpetas cargada:', folderStructure.value)
+        } else {
+            console.warn('⚠️ Error al cargar estructura:', response.data.message)
+            folderStructure.value = {}
+        }
+    } catch (error) {
+        console.error('❌ Error al cargar estructura de carpetas:', error)
+        showNotification('negative', 'Error al cargar carpetas', 'No se pudo conectar con el servidor')
+        folderStructure.value = {}
+    }
+}
+
+/**
+ * Obtiene la ruta completa actual como string
+ */
+function getCurrentPathString() {
+    return currentFolderPath.value.length === 0 ? '/' : '/' + currentFolderPath.value.join('/') + '/'
+}
+
+/**
+ * Obtiene la carpeta actual
+ */
+function getCurrentFolder() {
+    if (!folderStructure.value || Object.keys(folderStructure.value).length === 0) {
+        return {
+            id: 'root',
+            name: 'Documentos',
+            type: 'folder',
+            path: '/',
+            parent: null,
+            children: {},
+            documents: [],
+            createdAt: new Date().toISOString()
+        }
+    }
+    
+    const path = getCurrentPathString()
+    return folderStructure.value[path] || folderStructure.value['/']
+}
+
+/**
+ * Obtiene todos los items (carpetas y documentos) de la carpeta actual
+ */
+function getCurrentFolderItems() {
+    const currentFolder = getCurrentFolder()
+    const items = []
+    
+    if (!currentFolder) return []
+    
+    // Agregar subcarpetas
+    const children = currentFolder.children || {}
+    Object.values(children).forEach(childPath => {
+        const childFolder = folderStructure.value[childPath]
+        if (childFolder) {
+            items.push({ ...childFolder, itemType: 'folder' })
+        }
+    })
+    
+    // Agregar documentos
+    const folderDocuments = currentFolder.documents || []
+    if (Array.isArray(rows.value)) {
+        rows.value.forEach(doc => {
+            if (folderDocuments.includes(doc._id)) {
+                items.push({ ...doc, itemType: 'document' })
+            }
+        })
+    }
+    
+    return items
+}
+
+/**
+ * Crear carpeta
+ */
+async function createFolder(name, parentPath = null) {
+    if (!name || name.trim() === '') {
+        showNotification('negative', 'Nombre inválido', 'El nombre de la carpeta no puede estar vacío')
+        return false
+    }
+    
+    try {
+        const response = await axios.post(`${API_BASE_URL}/folders`, {
+            name: name.trim(),
+            parentPath: parentPath || getCurrentPathString()
+        })
+        
+        if (response.data.success) {
+            showNotification('positive', 'Carpeta creada', `Carpeta "${name.trim()}" creada exitosamente`)
+            await initializeFolderStructure()
+            return true
+        } else {
+            showNotification('negative', 'Error', response.data.message)
+            return false
+        }
+    } catch (error) {
+        showNotification('negative', 'Error al crear carpeta', error.response?.data?.message || 'No se pudo conectar')
+        return false
+    }
+}
+
+/**
+ * Eliminar carpeta
+ */
+async function deleteFolder(folderPath) {
+    const folder = folderStructure.value[folderPath]
+    
+    if (!folder || folderPath === '/') {
+        showNotification('negative', 'Error', 'No se puede eliminar esta carpeta')
+        return false
+    }
+    
+    const hasChildren = Object.keys(folder.children || {}).length > 0
+    const hasDocuments = (folder.documents || []).length > 0
+    
+    if (hasChildren || hasDocuments) {
+        showNotification('negative', 'Carpeta no vacía', 'Solo se pueden eliminar carpetas vacías')
+        return false
+    }
+    
+    if (!confirm(`¿Eliminar la carpeta "${folder.name}"?`)) return false
+    
+    try {
+        const response = await axios.delete(`${API_BASE_URL}/folders/${encodeURIComponent(folderPath)}`)
+        
+        if (response.data.success) {
+            showNotification('positive', 'Carpeta eliminada', `Carpeta "${folder.name}" eliminada`)
+            if (getCurrentPathString() === folderPath) {
+                navigateToFolder(folder.parent || '/')
+            }
+            await initializeFolderStructure()
+            return true
+        }
+    } catch (error) {
+        showNotification('negative', 'Error', error.response?.data?.message || 'No se pudo eliminar')
+    }
+    return false
+}
+
+/**
+ * Navegar a carpeta
+ */
+function navigateToFolder(folderPath) {
+    if (folderPath === '/') {
+        currentFolderPath.value = []
+    } else {
+        const cleanPath = folderPath.replace(/^\/|\/$/g, '')
+        currentFolderPath.value = cleanPath ? cleanPath.split('/') : []
+    }
+}
+
+/**
+ * Navegar hacia atrás
+ */
+function navigateUp() {
+    if (currentFolderPath.value.length > 0) {
+        currentFolderPath.value.pop()
+    }
+}
+
+/**
+ * Navegar desde breadcrumb
+ */
+function navigateToBreadcrumb(index) {
+    currentFolderPath.value = currentFolderPath.value.slice(0, index + 1)
+}
+
+/**
+ * Obtener ruta de breadcrumb
+ */
+function getBreadcrumbTrail() {
+    const trail = [{ name: 'Documentos', path: '/', index: -1 }]
+    currentFolderPath.value.forEach((folder, index) => {
+        const path = '/' + currentFolderPath.value.slice(0, index + 1).join('/') + '/'
+        trail.push({ name: folder, path, index })
+    })
+    return trail
+}
+
+/**
+ * Mover documento
+ */
+async function moveDocumentToFolder(documentId, targetFolderPath) {
+    try {
+        const response = await axios.put(`${API_BASE_URL}/${documentId}/move`, {
+            targetFolderPath
+        })
+        
+        if (response.data.success) {
+            showNotification('positive', 'Documento movido', 'Documento movido exitosamente')
+            await loadDocuments()
+            await initializeFolderStructure()
+            return true
+        }
+    } catch (error) {
+        showNotification('negative', 'Error', error.response?.data?.message || 'No se pudo mover')
+    }
+    return false
+}
+
+/**
+ * Carpetas disponibles
+ */
+function getAvailableFolders() {
+    const currentDocumentFolder = selectedDocumentToMove.value?.folderPath
+    
+    return Object.values(folderStructure.value)
+        .filter(folder => folder.type === 'folder' && folder.path !== currentDocumentFolder)
+        .map(folder => ({
+            label: folder.path === '/' ? 'Documentos (Raíz)' : folder.name,
+            value: folder.path,
+            path: folder.path
+        }))
+        .sort((a, b) => a.path.localeCompare(b.path))
+}
+
+/**
+ * Confirmar crear carpeta
+ */
+async function confirmCreateFolder() {
+    const success = await createFolder(newFolderName.value)
+    if (success) {
+        newFolderName.value = ''
+        showCreateFolderDialog.value = false
+    }
+}
+
+/**
+ * Iniciar mover documento
+ */
+function startMoveDocument(document) {
+    selectedDocumentToMove.value = document
+    selectedDestinationFolder.value = null
+    showMoveItemsDialog.value = true
+}
+
+/**
+ * Cancelar mover
+ */
+function cancelMoveDocument() {
+    selectedDocumentToMove.value = null
+    selectedDestinationFolder.value = null
+    showMoveItemsDialog.value = false
+}
+
+/**
+ * Confirmar mover
+ */
+async function confirmMoveDocument() {
+    if (selectedDocumentToMove.value && selectedDestinationFolder.value) {
+        const success = await moveDocumentToFolder(selectedDocumentToMove.value._id, selectedDestinationFolder.value)
+        if (success) cancelMoveDocument()
+    }
+}
+
+// Drag & Drop
+function onDragStart(event, item) {
+    if (item.itemType === 'document') {
+        event.dataTransfer.setData('application/json', JSON.stringify({
+            type: 'document',
+            id: item._id,
+            name: item.documento
+        }))
+        event.dataTransfer.effectAllowed = 'move'
+    }
+}
+
+function onDragOver(event, folderPath) {
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    dragOverFolder.value = folderPath
+}
+
+function onDragLeave(folderPath) {
+    if (dragOverFolder.value === folderPath) {
+        dragOverFolder.value = null
+    }
+}
+
+async function onDrop(event, folderPath) {
+    event.preventDefault()
+    dragOverFolder.value = null
+    
+    try {
+        const data = JSON.parse(event.dataTransfer.getData('application/json'))
+        if (data.type === 'document') {
+            await moveDocumentToFolder(data.id, folderPath)
+        }
+    } catch (error) {
+        showNotification('negative', 'Error', 'No se pudo mover el documento')
+    }
+}
+
 // Función para obtener datos cuando el componente se monta
-onMounted(() => {
-    getDocuments()
+onMounted(async () => {
+    await initializeFolderStructure()
+    await getDocuments()
     if (route?.query?.upload === '1' || route?.query?.upload === 'true') {
         openDialog()
     }
@@ -2974,5 +3679,214 @@ watch(() => route.query?.upload, (val) => {
     .result-title {
         font-size: 1.1rem;
     }
+}
+
+/* ========== ESTILOS DEL GESTOR DE CARPETAS ========== */
+
+/* Navegación breadcrumb */
+.breadcrumb-navigation {
+    background: var(--white);
+    padding: 1rem 1.5rem;
+    border-radius: 12px;
+    margin-bottom: 1rem;
+    box-shadow: var(--shadow);
+}
+
+.breadcrumb-content {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.breadcrumb-icon {
+    flex-shrink: 0;
+}
+
+.breadcrumb-path {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex-wrap: wrap;
+}
+
+.breadcrumb-item {
+    text-transform: none;
+    font-weight: 500;
+    color: var(--text-secondary);
+    transition: all 0.2s ease;
+}
+
+.breadcrumb-item:hover {
+    color: var(--primary-blue);
+    background: var(--primary-light);
+}
+
+.breadcrumb-item.current-crumb {
+    color: var(--primary-blue);
+    font-weight: 600;
+}
+
+.breadcrumb-separator {
+    margin: 0 0.25rem;
+}
+
+.breadcrumb-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Carpetas en la tabla */
+.item-name-cell {
+    padding: 0.5rem 0;
+}
+
+.item-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.item-icon {
+    flex-shrink: 0;
+}
+
+.item-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.item-name {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.clickable-item {
+    cursor: pointer;
+    transition: color 0.2s ease;
+}
+
+.clickable-item:hover {
+    color: var(--primary-blue);
+}
+
+.item-files-count {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.no-files-text {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+}
+
+/* Drag & Drop */
+.table-row.drag-over {
+    background-color: var(--primary-light) !important;
+    border-left: 3px solid var(--primary-blue);
+}
+
+.draggable-document {
+    cursor: move;
+}
+
+.draggable-document:active {
+    opacity: 0.6;
+}
+
+/* Modal crear carpeta */
+.folder-creation-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.current-location {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    background: var(--light-gray);
+    border-radius: 8px;
+}
+
+.location-text {
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.location-path {
+    font-weight: 600;
+    color: var(--primary-blue);
+}
+
+.creation-hint {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    padding: 0.5rem;
+    background: var(--info-light);
+    border-radius: 8px;
+}
+
+/* Modal mover documento */
+.move-document-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.document-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem;
+    background: var(--light-gray);
+    border-radius: 8px;
+}
+
+.document-name {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.destination-selection {
+    width: 100%;
+}
+
+.move-hint {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    padding: 0.5rem;
+    background: var(--info-light);
+    border-radius: 8px;
+}
+
+/* Selector de carpeta en upload */
+.folder-destination-section {
+    margin-bottom: 1rem;
+}
+
+.folder-selector {
+    width: 100%;
+}
+
+/* Estilos action buttons section */
+.action-buttons-section {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.primary-actions {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
 }
 </style>

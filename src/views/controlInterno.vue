@@ -605,7 +605,28 @@
 
                                     <!-- Metadatos del documento -->
                                     <div v-if="selectedFiles.length > 0 && !isUploading && !uploadResult" class="metadata-form">
-      
+                                        <!-- Selector de carpeta destino -->
+                                        <div class="folder-destination-section">
+                                            <q-select
+                                                v-model="selectedUploadFolder"
+                                                :options="getAvailableFolders()"
+                                                label="Carpeta destino"
+                                                outlined
+                                                dense
+                                                option-label="label"
+                                                option-value="value"
+                                                emit-value
+                                                map-options
+                                                class="folder-selector"
+                                            >
+                                                <template v-slot:prepend>
+                                                    <q-icon name="folder" color="blue-7" />
+                                                </template>
+                                                <template v-slot:hint>
+                                                    Selecciona dónde alojar el documento
+                                                </template>
+                                            </q-select>
+                                        </div>
                                     
                                         <q-textarea 
                                             v-model="documentDescription" 
@@ -2162,25 +2183,35 @@ async function confirmMoveDocument() {
  * Obtener carpetas disponibles para el desplegable
  */
 function getAvailableFolders() {
+    // Obtener la carpeta actual del documento seleccionado (solo aplica al mover documentos)
+    const currentDocumentFolder = selectedDocumentToMove.value?.folderPath
+    
     const folders = []
     
-    // Agregar carpeta raíz
-    folders.push({
-        label: 'Documentos (Raíz)',
-        value: '/',
-        path: '/'
-    })
+    // Agregar carpeta raíz (excluir solo si es la carpeta actual de un documento siendo movido)
+    if (!currentDocumentFolder || currentDocumentFolder !== '/') {
+        folders.push({
+            label: 'Documentos (Raíz)',
+            value: '/',
+            path: '/'
+        })
+    }
     
     // Función recursiva para obtener todas las carpetas
     function addFoldersRecursively(folderObj, currentPath) {
         if (folderObj.children) {
             Object.keys(folderObj.children).forEach(folderName => {
                 const folderPath = currentPath === '/' ? `/${folderName}` : `${currentPath}/${folderName}`
-                folders.push({
-                    label: folderPath.substring(1) || folderName, // Remover la primera barra
-                    value: folderPath + '/',
-                    path: folderPath + '/'
-                })
+                const folderPathWithSlash = folderPath + '/'
+                
+                // Solo agregar si no es la carpeta actual del documento (cuando se está moviendo)
+                if (!currentDocumentFolder || folderPathWithSlash !== currentDocumentFolder) {
+                    folders.push({
+                        label: folderPath.substring(1) || folderName, // Remover la primera barra
+                        value: folderPathWithSlash,
+                        path: folderPathWithSlash
+                    })
+                }
                 addFoldersRecursively(folderObj.children[folderName], folderPath)
             })
         }
@@ -3415,6 +3446,7 @@ onMounted(async () => {
 
 .file-types-container {
     display: flex;
+    justify-content: center;
     flex-wrap: wrap;
     gap: 0.25rem;
     align-items: center;

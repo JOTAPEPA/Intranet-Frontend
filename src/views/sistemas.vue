@@ -42,10 +42,6 @@
                         <p class="page-subtitle">Gestiona Documentos de Sistemas</p>    
                     </div>
                     <div class="header-actions">
-                        <q-btn flat round icon="notifications" class="action-btn" size="md">
-                            <q-tooltip>Notificaciones</q-tooltip>
-                            <q-badge color="red" floating>3</q-badge>
-                        </q-btn>
                         <q-btn flat round color="blue-7" icon="person" class="action-btn" size="md" @click="viewProfile">
                             <q-tooltip>Ver Perfil</q-tooltip>
                         </q-btn>
@@ -59,7 +55,7 @@
                 <!-- Action Buttons -->
                 <div class="action-buttons-section">
                     <div class="primary-actions">
-                        <q-btn-dropdown
+                        <q-btn
                             v-for="item in backdropFilterList"
                             :key="item.label"
                             unelevated
@@ -70,7 +66,7 @@
                             class="upload-btn"
                         >
                             <q-tooltip>Subir documentos de sistemas</q-tooltip>
-                        </q-btn-dropdown>
+                        </q-btn>
                     </div>
 
                     <div class="secondary-actions">
@@ -445,23 +441,45 @@
                     </q-dialog>
 
                 <!-- Breadcrumb Navigation -->
-                <div v-if="currentFolderPath.length > 0" class="breadcrumb-navigation">
-                    <q-breadcrumbs class="folder-breadcrumbs" separator="›">
-                        <q-breadcrumbs-el 
-                            label="Raíz" 
-                            icon="home"
-                            @click="navigateToRoot"
-                            class="breadcrumb-clickable"
-                        />
-                        <q-breadcrumbs-el
-                            v-for="(folder, index) in currentFolderPath"
-                            :key="index"
-                            :label="folder"
-                            icon="folder"
-                            @click="navigateToFolder(folder, index)"
-                            :class="{ 'breadcrumb-clickable': index < currentFolderPath.length - 1 }"
-                        />
-                    </q-breadcrumbs>
+                <div class="breadcrumb-navigation">
+                    <div class="breadcrumb-content">
+                        <q-icon name="folder_open" color="amber-8" size="sm" class="breadcrumb-icon" />
+                        <div class="breadcrumb-path">
+                            <q-btn 
+                                v-for="(crumb, index) in getBreadcrumbTrail()"
+                                :key="index"
+                                flat
+                                dense
+                                no-caps
+                                :label="crumb.name"
+                                @click="navigateToBreadcrumb(crumb.index)"
+                                class="breadcrumb-item"
+                                :class="{ 'current-crumb': index === getBreadcrumbTrail().length - 1 }"
+                            />
+                            <q-icon 
+                                v-if="currentFolderPath.length > 0"
+                                name="chevron_right" 
+                                size="xs" 
+                                color="grey-6"
+                                class="breadcrumb-separator"
+                            />
+                        </div>
+                        <q-space />
+                        <div class="breadcrumb-actions">
+                            <q-btn
+                                v-if="currentFolderPath.length > 0"
+                                flat
+                                dense
+                                round
+                                icon="arrow_upward"
+                                @click="navigateUp"
+                                color="blue-7"
+                                size="sm"
+                            >
+                                <q-tooltip>Subir un nivel</q-tooltip>
+                            </q-btn>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Data Table -->
@@ -533,14 +551,14 @@
                             <q-tr 
                                 :props="props" 
                                 class="table-row"
-                                :draggable="props.row.tipo === 'documento'"
+                                :draggable="props.row.itemType === 'document'"
                                 @dragstart="onDragStart($event, props.row)"
-                                @dragover.prevent="props.row.tipo === 'carpeta' ? onDragOver($event, props.row) : null"
-                                @dragleave="onDragLeave"
-                                @drop="props.row.tipo === 'carpeta' ? onDropFolder($event, props.row) : null"
+                                @dragover.prevent="props.row.itemType === 'folder' ? onDragOver($event, props.row.path) : null"
+                                @dragleave="onDragLeave(props.row.path)"
+                                @drop="props.row.itemType === 'folder' ? onDropFolder($event, props.row.path) : null"
                                 :class="{ 
-                                    'drag-over-row': dragOverFolder === props.row.nombre,
-                                    'draggable-row': props.row.tipo === 'documento'
+                                    'drag-over': dragOverFolder === props.row.path,
+                                    'draggable-document': props.row.itemType === 'document'
                                 }"
                             >
                                 <q-td
@@ -551,55 +569,47 @@
                                 >
                                     <!-- Columna de Nombre (con navegación para carpetas) -->
                                     <div v-if="col.name === 'nombre'" class="item-name-cell">
-                                        <div 
-                                            class="item-info"
-                                            :class="{ 'clickable': props.row.tipo === 'carpeta' }"
-                                            @click="props.row.tipo === 'carpeta' ? navigateIntoFolder(props.row.nombre) : null"
-                                        >
+                                        <div class="item-info">
                                             <q-icon 
-                                                :name="props.row.tipo === 'carpeta' ? 'folder' : 'description'" 
-                                                :color="props.row.tipo === 'carpeta' ? 'amber-8' : 'blue-7'"
+                                                :name="props.row.itemType === 'folder' ? 'folder' : 'description'" 
+                                                :color="props.row.itemType === 'folder' ? 'amber-8' : 'blue-7'"
                                                 size="sm"
                                                 class="item-icon"
                                             />
                                             <div class="item-details">
-                                                <span class="item-name">{{ col.value }}</span>
-                                                <span v-if="props.row.tipo === 'documento' && props.row.descripcion" class="item-description">
-                                                    {{ props.row.descripcion }}
+                                                <span 
+                                                    class="item-name"
+                                                    :class="{ 'clickable-item': props.row.itemType === 'folder' }"
+                                                    @click="props.row.itemType === 'folder' ? navigateToFolder(props.row.path) : null"
+                                                >
+                                                    {{ col.value }}
                                                 </span>
+                                                <span 
+                                                    v-if="props.row.itemType === 'folder'"
+                                                    class="item-files-count"
+                                                >
+                                                    {{ col.value }}
+                                                </span>
+                                                <span 
+                                                    v-else-if="props.row.cantidadArchivos > 0"
+                                                    class="item-files-count"
+                                                >
+                                                    {{ props.row.cantidadArchivos }} archivo{{ props.row.cantidadArchivos !== 1 ? 's' : '' }}
+                                                </span>
+                                                <span v-else class="no-files-text">Sin archivos</span>
                                             </div>
                                         </div>
                                     </div>
 
                                     <!-- Columna de Tipo -->
-                                    <div v-else-if="col.name === 'tipo'" class="item-type-cell">
-                                        <q-chip 
-                                            :color="props.row.tipo === 'carpeta' ? 'amber-1' : 'blue-1'" 
-                                            :text-color="props.row.tipo === 'carpeta' ? 'amber-9' : 'blue-9'"
-                                            :icon="props.row.tipo === 'carpeta' ? 'folder' : 'description'"
-                                            size="sm"
-                                        >
-                                            {{ props.row.tipo === 'carpeta' ? 'Carpeta' : 'Documento' }}
-                                        </q-chip>
-                                    </div>
-
-                                    <!-- Columna de Fecha -->
-                                    <div v-else-if="col.name === 'fechaCreacion'" class="date-cell">
-                                        {{ col.value }}
-                                    </div>
-
-                                    <!-- Columna de Información (archivos/subcarpetas) -->
-                                    <div v-else-if="col.name === 'informacion'" class="info-cell">
-                                        <span v-if="props.row.tipo === 'carpeta'">
-                                            {{ props.row.informacion || '0 elementos' }}
-                                        </span>
+                                    <div v-else-if="col.name === 'tipo'">
+                                        <span v-if="props.row.itemType === 'folder'">Carpeta</span>
                                         <div v-else class="file-types-container">
                                             <q-chip 
                                                 v-for="tipo in getUniqueFileTypes(props.row.documentos || [])"
                                                 :key="tipo"
                                                 :color="getFileTypeColor(tipo)"
-                                                :text-color="getFileTypeTextColor(tipo)"
-                                                :icon="getFileTypeIcon(tipo)"
+                                                text-color="white"
                                                 size="sm"
                                                 class="file-type-chip"
                                             >
@@ -608,17 +618,27 @@
                                         </div>
                                     </div>
 
+                                    <!-- Columna de Fecha -->
+                                    <div v-else-if="col.name === 'fechaCreacion'">
+                                        {{ col.value }}
+                                    </div>
+
+                                    <!-- Columna de Información (archivos/subcarpetas) -->
+                                    <div v-else-if="col.name === 'informacion'">
+                                        {{ col.value }}
+                                    </div>
+
                                     <!-- Columna de Acciones -->
                                     <div v-else-if="col.name === 'acciones'" class="action-buttons-cell">
                                         <!-- Acciones para carpetas -->
-                                        <template v-if="props.row.tipo === 'carpeta'">
+                                        <template v-if="props.row.itemType === 'folder'">
                                             <q-btn
                                                 flat
                                                 round
                                                 color="amber-8"
                                                 icon="folder_open"
                                                 size="sm"
-                                                @click="navigateIntoFolder(props.row.nombre)"
+                                                @click="navigateToFolder(props.row.path)"
                                                 class="action-btn-small"
                                             >
                                                 <q-tooltip>Abrir carpeta</q-tooltip>
@@ -629,7 +649,7 @@
                                                 color="red-7"
                                                 icon="delete"
                                                 size="sm"
-                                                @click="deleteFolder(props.row.nombre)"
+                                                @click="deleteFolder(props.row.path)"
                                                 class="action-btn-small"
                                             >
                                                 <q-tooltip>Eliminar carpeta</q-tooltip>
@@ -667,7 +687,7 @@
                                                 color="purple-7"
                                                 icon="drive_file_move"
                                                 size="sm"
-                                                @click="openMoveDialog(props.row)"
+                                                @click="startMoveDocument(props.row)"
                                                 class="action-btn-small"
                                             >
                                                 <q-tooltip>Mover documento</q-tooltip>
@@ -864,23 +884,15 @@ const viewDocumentDialog = ref(false)
 const selectedDocumentForView = ref(null)
 
 // ⭐ Estados para el sistema de carpetas
-const currentView = ref('folders')
 const currentFolderPath = ref([])
 const folderStructure = ref({})
-const selectedItems = ref([])
+const selectedUploadFolder = ref(null)
 const showCreateFolderDialog = ref(false)
 const newFolderName = ref('')
 const dragOverFolder = ref(null)
-const selectedUploadFolder = ref(null)
-
-// Diálogos específicos del gestor de carpetas
-const showFolderOptionsDialog = ref(false)
-const selectedFolder = ref(null)
-const showMoveItemsDialog = ref(false)
-const availableFolders = ref([])
 const selectedDocumentToMove = ref(null)
 const selectedDestinationFolder = ref(null)
-const draggedDocument = ref(null)
+const showMoveItemsDialog = ref(false)
 
 // Reglas de validación para nombres de carpetas
 const folderNameRules = [
@@ -1015,7 +1027,7 @@ const rows = ref([])
  * Lista de botones para subir documentos
  */
 const list = [
-  'Subir Documento de Sistemas',
+  'Subir Documento',
 ]
 
 const backdropFilterList = list.map(filter => ({
@@ -3491,88 +3503,157 @@ watch(() => route.query?.upload, (val) => {
    ESTILOS DEL SISTEMA DE CARPETAS
    ============================================ */
 
-/* Breadcrumb Navigation */
+/* ========== ESTILOS DEL GESTOR DE CARPETAS ========== */
+
+/* Navegación breadcrumb */
 .breadcrumb-navigation {
-    background: white;
+    background: var(--white);
     padding: 1rem 1.5rem;
     border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
+    box-shadow: var(--shadow);
 }
 
-.folder-breadcrumbs {
-    font-size: 0.95rem;
+.breadcrumb-content {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
 }
 
-.breadcrumb-clickable {
-    cursor: pointer;
+.breadcrumb-icon {
+    flex-shrink: 0;
+}
+
+.breadcrumb-path {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex-wrap: wrap;
+}
+
+.breadcrumb-item {
+    text-transform: none;
+    font-weight: 500;
+    color: var(--text-secondary);
     transition: all 0.2s ease;
 }
 
-.breadcrumb-clickable:hover {
-    color: var(--q-primary) !important;
-    transform: translateY(-1px);
+.breadcrumb-item:hover {
+    color: var(--primary-blue);
+    background: var(--primary-light);
 }
 
-/* Action Buttons Section */
+.breadcrumb-item.current-crumb {
+    color: var(--primary-blue);
+    font-weight: 600;
+}
+
+.breadcrumb-separator {
+    margin: 0 0.25rem;
+}
+
+.breadcrumb-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Estilos action buttons section */
 .action-buttons-section {
     display: flex;
     gap: 1rem;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
+    margin-bottom: 1rem;
 }
 
 .primary-actions {
     display: flex;
-    gap: 0.75rem;
+    gap: 1rem;
     flex-wrap: wrap;
 }
 
-.secondary-actions {
-    display: flex;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-}
-
-.new-folder-btn {
-    min-width: 160px;
-}
-
-/* Folder Dialogs */
-.folder-dialog,
-.move-dialog {
-    min-width: 400px;
-}
-
-.folder-dialog .dialog-content,
-.move-dialog .dialog-content {
-    padding: 1.5rem;
-}
-
-.move-info {
+/* Modal crear carpeta */
+.folder-creation-form {
     display: flex;
     flex-direction: column;
-    align-items: center;
     gap: 1rem;
 }
 
-.document-to-move {
+.current-location {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.75rem 1rem;
-    background: #f5f5f5;
+    padding: 0.75rem;
+    background: var(--light-gray);
     border-radius: 8px;
+}
+
+.location-text {
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.location-path {
+    font-weight: 600;
+    color: var(--primary-blue);
+}
+
+.creation-hint {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    padding: 0.5rem;
+    background: var(--info-light);
+    border-radius: 8px;
+}
+
+/* Modal mover documento */
+.move-document-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.document-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem;
+    background: var(--light-gray);
+    border-radius: 8px;
+}
+
+.document-name {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.destination-selection {
     width: 100%;
 }
 
-.document-to-move .document-name {
-    font-weight: 500;
-    color: #1976d2;
+.move-hint {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    padding: 0.5rem;
+    background: var(--info-light);
+    border-radius: 8px;
 }
 
-/* Table Row Styles for Folders */
+/* Selector de carpeta en upload */
+.folder-destination-section {
+    margin-bottom: 1rem;
+}
+
+.folder-selector {
+    width: 100%;
+}
+
+/* Carpetas en la tabla */
 .item-name-cell {
     padding: 0.5rem 0;
 }
@@ -3581,18 +3662,6 @@ watch(() => route.query?.upload, (val) => {
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    padding: 0.5rem;
-    border-radius: 8px;
-    transition: all 0.2s ease;
-}
-
-.item-info.clickable {
-    cursor: pointer;
-}
-
-.item-info.clickable:hover {
-    background: #f5f5f5;
-    transform: translateX(4px);
 }
 
 .item-icon {
@@ -3603,50 +3672,44 @@ watch(() => route.query?.upload, (val) => {
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
-    min-width: 0;
 }
 
 .item-name {
     font-weight: 500;
-    color: #212121;
-    word-break: break-word;
+    color: var(--text-primary);
 }
 
-.item-description {
-    font-size: 0.85rem;
-    color: #757575;
-    word-break: break-word;
+.clickable-item {
+    cursor: pointer;
+    transition: color 0.2s ease;
 }
 
-.item-type-cell {
-    text-align: center;
+.clickable-item:hover {
+    color: var(--primary-blue);
 }
 
-.date-cell {
-    color: #616161;
-    font-size: 0.9rem;
+.item-files-count {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
 }
 
-.info-cell {
-    text-align: center;
+.no-files-text {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
 }
 
-/* Drag and Drop Styles */
-.draggable-row {
+/* Drag & Drop */
+.table-row.drag-over {
+    background-color: var(--primary-light) !important;
+    border-left: 3px solid var(--primary-blue);
+}
+
+.draggable-document {
     cursor: move;
 }
 
-.draggable-row:hover {
-    background: rgba(25, 118, 210, 0.05);
-}
-
-.drag-over-row {
-    background: rgba(255, 193, 7, 0.15) !important;
-    border: 2px dashed #ffc107 !important;
-}
-
-.drag-over-row td {
-    background: transparent !important;
+.draggable-document:active {
+    opacity: 0.6;
 }
 
 /* File Types Container */
